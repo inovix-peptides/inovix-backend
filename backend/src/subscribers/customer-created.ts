@@ -41,7 +41,7 @@ export default async function customerCreatedHandler({
       `Welkom bij Inovix\n\n` +
       `Beste ${greetingName},\n\n` +
       `Bedankt voor het aanmaken van uw account bij Inovix. U heeft nu ` +
-      `toegang tot ons volledige assortiment onderzoekspeptiden, kunt eerdere ` +
+      `toegang tot ons volledige assortiment onderzoeksproducten, kunt eerdere ` +
       `bestellingen inzien en verzendgegevens beheren.\n\n` +
       `Hoe te bestellen:\n` +
       `1. Bekijk ons assortiment: ${productsUrl}\n` +

@@ -42,7 +42,7 @@ export const CustomerWelcomeTemplate: React.FC<CustomerWelcomeTemplateProps> & {
         </Text>
         <Text className="text-black text-[14px] leading-[22px] mt-[12px]">
           Bedankt voor het aanmaken van uw account bij Inovix. U heeft nu
-          toegang tot ons volledige assortiment onderzoekspeptiden, kunt
+          toegang tot ons volledige assortiment onderzoeksproducten, kunt
           eerdere bestellingen inzien en verzendgegevens beheren.
         </Text>
       </Section>
