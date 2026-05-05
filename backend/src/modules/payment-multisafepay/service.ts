@@ -199,6 +199,33 @@ class MultisafepayPaymentProviderService extends AbstractPaymentProvider<Multisa
       return { data: incoming as Record<string, unknown> }
     }
 
+    // Reuse the existing live MSP order if amount/currency haven't changed.
+    // Storefront fires initiatePaymentSession on every checkout step entry,
+    // and re-creating an MSP order each time leaves orphan open orders on
+    // MSP's side and can produce parallel orders for the same cart.
+    const incomingAmountCents = this.toSmallestUnit(
+      input.amount,
+      input.currency_code
+    )
+    if (
+      incoming.mspOrderId &&
+      incoming.paymentUrl &&
+      incoming.amount === incomingAmountCents &&
+      incoming.currency === input.currency_code
+    ) {
+      return { data: incoming as Record<string, unknown> }
+    }
+
+    // Stale MSP order from a previous amount: best-effort cancel before
+    // creating a fresh one, so we don't leave the old one open on MSP.
+    if (incoming.mspOrderId) {
+      await this.client_.cancelOrder(incoming.mspOrderId).catch((err) => {
+        this.logger_.warn(
+          `MultiSafepay: failed to cancel stale order ${incoming.mspOrderId}: ${(err as Error).message}`
+        )
+      })
+    }
+
     const reinitiated = await this.initiatePayment({
       amount: input.amount,
       currency_code: input.currency_code,

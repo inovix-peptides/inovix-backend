@@ -172,6 +172,125 @@ describe("initiatePayment", () => {
   })
 })
 
+describe("updatePayment", () => {
+  beforeEach(() => {
+    process.env.STOREFRONT_URL = "https://shop.test"
+    process.env.BACKEND_PUBLIC_URL = "https://api.test"
+  })
+
+  it("returns existing data unchanged and skips MSP calls when transactionId is set", async () => {
+    const { service, client } = makeService()
+    const existing = {
+      mspOrderId: "tnc_abc",
+      paymentUrl: "https://payv2/abc",
+      transactionId: "txn_42",
+      amount: 1999,
+      currency: "EUR",
+    }
+
+    const result = await service.updatePayment({
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      data: existing as any,
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      amount: 19.99 as any,
+      currency_code: "EUR",
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      context: {} as any,
+    })
+
+    expect(result.data).toEqual(existing)
+    expect(client.createOrder).not.toHaveBeenCalled()
+    expect(client.cancelOrder).not.toHaveBeenCalled()
+  })
+
+  it("reuses live MSP order when amount and currency are unchanged", async () => {
+    const { service, client } = makeService()
+    const existing = {
+      mspOrderId: "tnc_abc",
+      paymentUrl: "https://payv2/abc",
+      amount: 1999,
+      currency: "EUR",
+    }
+
+    const result = await service.updatePayment({
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      data: existing as any,
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      amount: 19.99 as any,
+      currency_code: "EUR",
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      context: {} as any,
+    })
+
+    expect(result.data).toEqual(existing)
+    expect(client.createOrder).not.toHaveBeenCalled()
+    expect(client.cancelOrder).not.toHaveBeenCalled()
+  })
+
+  it("cancels stale MSP order and re-initiates when amount changes", async () => {
+    const { service, client } = makeService()
+    client.cancelOrder.mockResolvedValue(undefined)
+    client.createOrder.mockResolvedValue({
+      orderId: "tnc_new",
+      paymentUrl: "https://payv2/new",
+    })
+
+    const existing = {
+      mspOrderId: "tnc_old",
+      paymentUrl: "https://payv2/old",
+      amount: 1999,
+      currency: "EUR",
+    }
+
+    const result = await service.updatePayment({
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      data: existing as any,
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      amount: 29.99 as any,
+      currency_code: "EUR",
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      context: {} as any,
+    })
+
+    expect(client.cancelOrder).toHaveBeenCalledTimes(1)
+    expect(client.cancelOrder).toHaveBeenCalledWith("tnc_old")
+    expect(client.createOrder).toHaveBeenCalledTimes(1)
+    expect((result.data as { mspOrderId?: string }).mspOrderId).toBe("tnc_new")
+    expect((result.data as { amount?: number }).amount).toBe(2999)
+  })
+
+  it("does not throw when cancelOrder fails during re-initiate", async () => {
+    const { service, client, logger } = makeService()
+    client.cancelOrder.mockRejectedValue(new Error("network blip"))
+    client.createOrder.mockResolvedValue({
+      orderId: "tnc_new",
+      paymentUrl: "https://payv2/new",
+    })
+
+    const existing = {
+      mspOrderId: "tnc_old",
+      paymentUrl: "https://payv2/old",
+      amount: 1999,
+      currency: "EUR",
+    }
+
+    await expect(
+      service.updatePayment({
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
+        data: existing as any,
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
+        amount: 29.99 as any,
+        currency_code: "EUR",
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
+        context: {} as any,
+      })
+    ).resolves.toBeDefined()
+
+    expect(logger.warn).toHaveBeenCalled()
+    expect(client.createOrder).toHaveBeenCalledTimes(1)
+  })
+})
+
 describe("authorizePayment", () => {
   it("returns pending if mspOrderId is not yet on the session", async () => {
     const { service } = makeService()

@@ -34,6 +34,33 @@ const FAILED_STATUSES = [
 // genuinely stuck carts that have had time to complete and didn't.
 const ABANDONED_CART_GRACE_MS = 10 * 60 * 1000
 
+// MSP retries up to 3x at 15-min intervals on non-200, and may also fire
+// legitimate state-change webhooks (e.g. uncleared -> completed). To stop
+// admin emails, payment.failed events, and Sentry captures from doubling
+// up, dedupe successful side-effect runs in-memory by (mspOrderId:status)
+// for a window that comfortably covers MSP's retry envelope.
+const IDEMPOTENCY_TTL_MS = 30 * 60 * 1000
+const idempotencyCache = new Map<string, number>()
+
+function sweepIdempotencyCache(now: number): void {
+  for (const [key, ts] of idempotencyCache) {
+    if (now - ts >= IDEMPOTENCY_TTL_MS) {
+      idempotencyCache.delete(key)
+    }
+  }
+}
+
+function hasRecentlyProcessed(key: string, now: number): boolean {
+  const ts = idempotencyCache.get(key)
+  if (ts === undefined) return false
+  return now - ts < IDEMPOTENCY_TTL_MS
+}
+
+// Exposed for tests; not part of the public route contract.
+export function __resetIdempotencyCacheForTests(): void {
+  idempotencyCache.clear()
+}
+
 function getClient(): MultisafepayClient | null {
   const apiKey = process.env.MULTISAFEPAY_API_KEY
   if (!apiKey) return null
@@ -75,6 +102,9 @@ export async function POST(
   try {
     // Medusa's getWebhookActionAndData prepends `pp_` to `provider`, so pass
     // the bare identifier (without the prefix that PROVIDER_ID carries).
+    // Always run this regardless of dedupe state | Medusa's session-state
+    // update is idempotent on its own and we want it to keep up with any
+    // legitimate state changes MSP delivers.
     await paymentModule.getWebhookActionAndData({
       provider: PROVIDER_ID.replace(/^pp_/, ""),
       payload: {
@@ -84,23 +114,61 @@ export async function POST(
       },
     })
 
-    await checkAbandonedCartPaid(req, logger).catch((err) => {
+    // Fetch the MSP order once and share it across both side-effect helpers
+    // (cuts MSP API calls in half and lets us dedupe on a single status).
+    const body = req.body as MultisafepayWebhookPayload | undefined
+    const order = await fetchOrderFromWebhook(body).catch((err) => {
       logger.error(
-        `MultiSafepay webhook abandoned-cart check failed: ${(err as Error).message}`
+        `MultiSafepay webhook order lookup failed: ${(err as Error).message}`
       )
-      Sentry.captureException(err, {
-        tags: { route: "multisafepay-webhook-abandoned-cart" },
-      })
+      return null
     })
 
-    await emitPaymentFailed(req, logger).catch((err) => {
-      logger.error(
-        `MultiSafepay webhook payment-failed emit failed: ${(err as Error).message}`
-      )
-      Sentry.captureException(err, {
-        tags: { route: "multisafepay-webhook-payment-failed" },
+    const now = Date.now()
+    sweepIdempotencyCache(now)
+
+    const idempotencyKey = order
+      ? `${order.orderId}:${order.status}`
+      : null
+    const alreadyProcessed =
+      idempotencyKey !== null && hasRecentlyProcessed(idempotencyKey, now)
+
+    if (order && !alreadyProcessed) {
+      let abandonedFailed = false
+      let paymentFailedFailed = false
+
+      await checkAbandonedCartPaid(req, logger, order).catch((err) => {
+        abandonedFailed = true
+        logger.error(
+          `MultiSafepay webhook abandoned-cart check failed: ${(err as Error).message}`
+        )
+        Sentry.captureException(err, {
+          tags: { route: "multisafepay-webhook-abandoned-cart" },
+        })
       })
-    })
+
+      await emitPaymentFailed(req, logger, order).catch((err) => {
+        paymentFailedFailed = true
+        logger.error(
+          `MultiSafepay webhook payment-failed emit failed: ${(err as Error).message}`
+        )
+        Sentry.captureException(err, {
+          tags: { route: "multisafepay-webhook-payment-failed" },
+        })
+      })
+
+      // Only stamp the dedupe cache when BOTH side effects succeeded.
+      // Otherwise a transient Resend/EventBus failure would silently mute
+      // the next ~30min of retries for the same (orderId, status), and
+      // we'd never recover until the next status transition.
+      if (idempotencyKey && !abandonedFailed && !paymentFailedFailed) {
+        idempotencyCache.set(idempotencyKey, now)
+      }
+    } else if (alreadyProcessed) {
+      logger.info(
+        `MultiSafepay webhook: skipping side effects, already processed ${idempotencyKey} within ${IDEMPOTENCY_TTL_MS / 60000}m`
+      )
+    }
 
     ackOk(res)
   } catch (err) {
@@ -141,11 +209,9 @@ async function fetchOrderFromWebhook(
 
 async function checkAbandonedCartPaid(
   req: MedusaRequest,
-  logger: Logger
+  logger: Logger,
+  order: MultisafepayOrder
 ): Promise<void> {
-  const body = req.body as MultisafepayWebhookPayload | undefined
-  const order = await fetchOrderFromWebhook(body)
-  if (!order) return
   if (!PAID_STATUSES.includes(order.status as (typeof PAID_STATUSES)[number])) return
 
   const paymentModule = req.scope.resolve(Modules.PAYMENT) as IPaymentModuleService
@@ -262,6 +328,9 @@ async function checkAbandonedCartPaid(
     to: adminEmail,
     channel: "email",
     template: EmailTemplates.ABANDONED_CART_PAID,
+    // Belt-and-braces dedupe key: the in-memory cache muffles same-process
+    // duplicates, this catches anything that slips through after a restart.
+    idempotency_key: `abandoned-cart-paid-${order.orderId}`,
     data: {
       emailOptions: {
         subject: `[Inovix] Abandoned cart paid | MSP ${order.orderId}`,
@@ -286,11 +355,9 @@ async function checkAbandonedCartPaid(
 
 async function emitPaymentFailed(
   req: MedusaRequest,
-  logger: Logger
+  logger: Logger,
+  order: MultisafepayOrder
 ): Promise<void> {
-  const body = req.body as MultisafepayWebhookPayload | undefined
-  const order = await fetchOrderFromWebhook(body)
-  if (!order) return
   if (!FAILED_STATUSES.includes(order.status as (typeof FAILED_STATUSES)[number])) return
 
   const eventBus = req.scope.resolve(Modules.EVENT_BUS) as IEventBusModuleService

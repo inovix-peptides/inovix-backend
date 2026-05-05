@@ -26,19 +26,23 @@ type PaymentSessionRow = {
 }
 
 // The storefront calls this endpoint from /checkout/multisafepay-return
-// after MultiSafepay redirects the customer back. We attach the MSP
-// transaction_id (and verify the round-trip order_id) to the Medusa
-// payment session so the subsequent cart.complete() can authorize.
+// after MultiSafepay redirects the customer back. The primary purpose is
+// the round-trip integrity check: the order_id from MSP's redirect URL
+// must match the mspOrderId we stashed in the payment session at initiate
+// time. This prevents a crafted return URL from settling a cart against
+// an unrelated MSP order. transaction_id is optional | MSP only echoes
+// our order_id in the redirect, not their internal transaction_id, so the
+// storefront usually has nothing useful to write.
 export async function POST(
   req: MedusaRequest,
   res: MedusaResponse
 ): Promise<void> {
   const { cart_id, transaction_id, order_id } = (req.body ?? {}) as RequestBody
 
-  if (!cart_id || !transaction_id) {
+  if (!cart_id || !order_id) {
     res
       .status(400)
-      .json({ error: "cart_id and transaction_id are required" })
+      .json({ error: "cart_id and order_id are required" })
     return
   }
 
@@ -85,23 +89,24 @@ export async function POST(
     const existingData = (session.data ?? {}) as SessionDataShape
 
     if (
-      order_id !== undefined &&
-      existingData.mspOrderId !== undefined &&
+      existingData.mspOrderId === undefined ||
       String(existingData.mspOrderId) !== String(order_id)
     ) {
       res.status(400).json({ error: "order_id mismatch" })
       return
     }
 
-    await paymentModule.updatePaymentSession({
-      id: session.id,
-      data: {
-        ...existingData,
-        transactionId: String(transaction_id),
-      } as Record<string, unknown>,
-      amount: session.amount,
-      currency_code: session.currency_code,
-    })
+    if (transaction_id !== undefined) {
+      await paymentModule.updatePaymentSession({
+        id: session.id,
+        data: {
+          ...existingData,
+          transactionId: String(transaction_id),
+        } as Record<string, unknown>,
+        amount: session.amount,
+        currency_code: session.currency_code,
+      })
+    }
 
     res.status(200).json({ ok: true })
   } catch (err) {

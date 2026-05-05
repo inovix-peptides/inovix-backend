@@ -30,7 +30,7 @@ jest.mock("../../../../modules/email-notifications/templates", () => ({
   EmailTemplates: { ABANDONED_CART_PAID: "abandoned-cart-paid" },
 }))
 
-import { POST } from "../route"
+import { POST, __resetIdempotencyCacheForTests } from "../route"
 
 const mockLogger = {
   error: jest.fn(),
@@ -79,6 +79,7 @@ describe("POST /webhooks/multisafepay", () => {
   beforeEach(() => {
     jest.clearAllMocks()
     mockGetOrder.mockReset()
+    __resetIdempotencyCacheForTests()
     process.env.SUPPORT_EMAIL = "ops@example.test"
     process.env.MULTISAFEPAY_API_KEY = "test-key"
   })
@@ -207,5 +208,212 @@ describe("POST /webhooks/multisafepay", () => {
     await POST(req, mockResponse())
 
     expect(notification.createNotifications).toHaveBeenCalledTimes(1)
+  })
+
+  describe("idempotency", () => {
+    function buildAbandonedScenario() {
+      const paymentModule = {
+        getWebhookActionAndData: jest.fn().mockResolvedValue(undefined),
+        listPaymentSessions: jest.fn().mockResolvedValue([
+          {
+            id: "ps_1",
+            payment_collection_id: "paycol_1",
+            created_at: new Date(Date.now() - 30 * 60 * 1000).toISOString(),
+            data: { mspOrderId: "tnc_abc" },
+          },
+        ]),
+      }
+      const notification = {
+        createNotifications: jest.fn().mockResolvedValue(undefined),
+      }
+      const query = {
+        graph: jest.fn().mockResolvedValue({
+          data: [
+            {
+              cart: {
+                id: "cart_1",
+                email: "u@example.test",
+                completed_at: null,
+                currency_code: "EUR",
+              },
+            },
+          ],
+        }),
+      }
+      return { paymentModule, notification, query }
+    }
+
+    it("fires side effects on the first webhook for (orderId, completed)", async () => {
+      const { paymentModule, notification, query } = buildAbandonedScenario()
+      mockGetOrder.mockResolvedValue({
+        orderId: "tnc_abc",
+        status: "completed",
+        amountCents: 1000,
+        currencyCode: "EUR",
+      })
+
+      const req = mockRequest(
+        paymentModule,
+        { order_id: "tnc_abc" },
+        { query, notification }
+      )
+      await POST(req, mockResponse())
+
+      expect(notification.createNotifications).toHaveBeenCalledTimes(1)
+    })
+
+    it("skips side effects on a duplicate webhook within the TTL window", async () => {
+      const { paymentModule, notification, query } = buildAbandonedScenario()
+      mockGetOrder.mockResolvedValue({
+        orderId: "tnc_abc",
+        status: "completed",
+        amountCents: 1000,
+        currencyCode: "EUR",
+      })
+
+      const req1 = mockRequest(
+        paymentModule,
+        { order_id: "tnc_abc" },
+        { query, notification }
+      )
+      await POST(req1, mockResponse())
+      const req2 = mockRequest(
+        paymentModule,
+        { order_id: "tnc_abc" },
+        { query, notification }
+      )
+      await POST(req2, mockResponse())
+
+      // Side effects fire once, but Medusa's session-state update keeps running.
+      expect(notification.createNotifications).toHaveBeenCalledTimes(1)
+      expect(paymentModule.getWebhookActionAndData).toHaveBeenCalledTimes(2)
+    })
+
+    it("fires for a different status on the same orderId (uncleared then completed)", async () => {
+      const eventBus = { emit: jest.fn().mockResolvedValue(undefined) }
+      const { paymentModule, notification, query } = buildAbandonedScenario()
+
+      // First delivery: uncleared (does not trigger paid OR failed side effects)
+      mockGetOrder.mockResolvedValueOnce({
+        orderId: "tnc_abc",
+        status: "uncleared",
+        amountCents: 1000,
+        currencyCode: "EUR",
+      })
+      const req1 = mockRequest(
+        paymentModule,
+        { order_id: "tnc_abc" },
+        { query, notification, eventBus }
+      )
+      await POST(req1, mockResponse())
+      expect(notification.createNotifications).not.toHaveBeenCalled()
+
+      // Second delivery: completed (different status, should NOT be deduped)
+      mockGetOrder.mockResolvedValueOnce({
+        orderId: "tnc_abc",
+        status: "completed",
+        amountCents: 1000,
+        currencyCode: "EUR",
+      })
+      const req2 = mockRequest(
+        paymentModule,
+        { order_id: "tnc_abc" },
+        { query, notification, eventBus }
+      )
+      await POST(req2, mockResponse())
+
+      expect(notification.createNotifications).toHaveBeenCalledTimes(1)
+    })
+
+    it("re-fires after the TTL window elapses (cache sweep)", async () => {
+      const { paymentModule, notification, query } = buildAbandonedScenario()
+      mockGetOrder.mockResolvedValue({
+        orderId: "tnc_abc",
+        status: "completed",
+        amountCents: 1000,
+        currencyCode: "EUR",
+      })
+
+      const realDateNow = Date.now
+      try {
+        const t0 = realDateNow()
+        Date.now = jest.fn(() => t0)
+
+        const req1 = mockRequest(
+          paymentModule,
+          { order_id: "tnc_abc" },
+          { query, notification }
+        )
+        await POST(req1, mockResponse())
+        expect(notification.createNotifications).toHaveBeenCalledTimes(1)
+
+        // Advance clock just past TTL (30 min) so the sweep evicts the entry.
+        Date.now = jest.fn(() => t0 + 31 * 60 * 1000)
+
+        const req2 = mockRequest(
+          paymentModule,
+          { order_id: "tnc_abc" },
+          { query, notification }
+        )
+        await POST(req2, mockResponse())
+        expect(notification.createNotifications).toHaveBeenCalledTimes(2)
+      } finally {
+        Date.now = realDateNow
+      }
+    })
+
+    it("does NOT stamp the cache when the side effect throws, so the next delivery retries", async () => {
+      const { paymentModule, query } = buildAbandonedScenario()
+      const notification = {
+        createNotifications: jest
+          .fn()
+          .mockRejectedValueOnce(new Error("transient resend failure"))
+          .mockResolvedValueOnce(undefined),
+      }
+      mockGetOrder.mockResolvedValue({
+        orderId: "tnc_abc",
+        status: "completed",
+        amountCents: 1000,
+        currencyCode: "EUR",
+      })
+
+      const req1 = mockRequest(
+        paymentModule,
+        { order_id: "tnc_abc" },
+        { query, notification }
+      )
+      await POST(req1, mockResponse())
+
+      // First delivery threw inside the side effect, so the cache should NOT
+      // have been stamped. A retry within the TTL window must run again.
+      const req2 = mockRequest(
+        paymentModule,
+        { order_id: "tnc_abc" },
+        { query, notification }
+      )
+      await POST(req2, mockResponse())
+
+      expect(notification.createNotifications).toHaveBeenCalledTimes(2)
+    })
+
+    it("passes idempotency_key to createNotifications for cross-restart dedupe", async () => {
+      const { paymentModule, notification, query } = buildAbandonedScenario()
+      mockGetOrder.mockResolvedValue({
+        orderId: "tnc_abc",
+        status: "completed",
+        amountCents: 1000,
+        currencyCode: "EUR",
+      })
+
+      const req = mockRequest(
+        paymentModule,
+        { order_id: "tnc_abc" },
+        { query, notification }
+      )
+      await POST(req, mockResponse())
+
+      const arg = notification.createNotifications.mock.calls[0][0]
+      expect(arg.idempotency_key).toBe("abandoned-cart-paid-tnc_abc")
+    })
   })
 })
