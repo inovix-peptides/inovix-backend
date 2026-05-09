@@ -210,23 +210,20 @@ const ProductBadgesWidget = ({ data }: DetailWidgetProps<AdminProduct>) => {
             const checked = selected.includes(opt.key)
             const id = `badge-${opt.key}`
             return (
-              <div
-                key={opt.key}
-                className="flex items-start justify-between gap-x-4"
-              >
-                <div className="flex flex-col">
+              <div key={opt.key} className="flex flex-col gap-y-1">
+                <div className="flex items-center justify-between gap-x-4">
                   <Label htmlFor={id} className="txt-small font-medium">
                     {opt.label}
                   </Label>
-                  <Text size="xsmall" className="text-ui-fg-subtle mt-1">
-                    {opt.when}
-                  </Text>
+                  <Switch
+                    id={id}
+                    checked={checked}
+                    onCheckedChange={(v) => toggle(opt.key, Boolean(v))}
+                  />
                 </div>
-                <Switch
-                  id={id}
-                  checked={checked}
-                  onCheckedChange={(v) => toggle(opt.key, Boolean(v))}
-                />
+                <Text size="xsmall" className="text-ui-fg-subtle">
+                  {opt.when}
+                </Text>
               </div>
             )
           })}
