@@ -16,7 +16,9 @@ const config: Config = {
   },
   testMatch: ["<rootDir>/src/**/__tests__/**/*.test.ts", "<rootDir>/src/**/__tests__/**/*.test.tsx"],
   moduleNameMapper: {
-    "^(.*)\\.js$": "$1",
+    // Only strip `.js` from relative imports (TS-with-ESM convention).
+    // Leaves package imports like `bignumber.js` alone.
+    "^(\\.{1,2}\\/.*)\\.js$": "$1",
   },
   moduleDirectories: ["node_modules", "src"],
   clearMocks: true,

@@ -18,6 +18,9 @@ import {
   STRIPE_WEBHOOK_SECRET,
   MULTISAFEPAY_API_KEY,
   MULTISAFEPAY_ENVIRONMENT,
+  BROKER_URL,
+  BROKER_CLIENT_ID,
+  BROKER_HMAC_SECRET,
   WORKER_MODE,
   MINIO_ENDPOINT,
   MINIO_ACCESS_KEY,
@@ -131,7 +134,8 @@ const medusaConfig = {
     }] : []),
     ...(
       (STRIPE_API_KEY && STRIPE_WEBHOOK_SECRET) ||
-      MULTISAFEPAY_API_KEY
+      MULTISAFEPAY_API_KEY ||
+      (BROKER_URL && BROKER_CLIENT_ID && BROKER_HMAC_SECRET)
         ? [{
             key: Modules.PAYMENT,
             resolve: '@medusajs/payment',
@@ -151,6 +155,15 @@ const medusaConfig = {
                   options: {
                     apiKey: MULTISAFEPAY_API_KEY,
                     environment: MULTISAFEPAY_ENVIRONMENT,
+                  },
+                }] : []),
+                ...(BROKER_URL && BROKER_CLIENT_ID && BROKER_HMAC_SECRET ? [{
+                  resolve: './src/modules/payment-via-broker',
+                  id: 'via_broker',
+                  options: {
+                    brokerUrl: BROKER_URL,
+                    clientId: BROKER_CLIENT_ID,
+                    hmacSecret: BROKER_HMAC_SECRET,
                   },
                 }] : []),
               ],

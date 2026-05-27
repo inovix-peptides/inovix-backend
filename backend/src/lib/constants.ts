@@ -105,6 +105,15 @@ export const MULTISAFEPAY_ENVIRONMENT =
   (process.env.MULTISAFEPAY_ENVIRONMENT as "production" | "test" | undefined) ?? "production";
 
 /**
+ * (optional) Payments routed through an external broker (tenant of an MoR
+ * payments aggregator). Code references the broker generically; the env
+ * value names the operator-visible URL.
+ */
+export const BROKER_URL = process.env.BROKER_URL;
+export const BROKER_CLIENT_ID = process.env.BROKER_CLIENT_ID;
+export const BROKER_HMAC_SECRET = process.env.BROKER_HMAC_SECRET;
+
+/**
  * (optional) Meilisearch configuration
  */
 export const MEILISEARCH_HOST = process.env.MEILISEARCH_HOST;
