@@ -84,4 +84,58 @@ describe("DhlExpressClient", () => {
       })
     })
   })
+
+  describe("error handling", () => {
+    const baseOptions = {
+      apiKey: "k", apiSecret: "s", accountNumber: "a",
+      baseUrl: "https://x/mydhlapi/test",
+      shipper: {
+        name: "I", street: "S", city: "A", postalCode: "1",
+        countryCode: "NL", phone: "+31", email: "o@i.com",
+      },
+    }
+    const input = {
+      productCode: "P" as const,
+      messageReference: "mr",
+      shipper: baseOptions.shipper, recipient: baseOptions.shipper,
+      pieces: [{ weightKg: 1, lengthCm: 10, widthCm: 10, heightCm: 10 }],
+      declaredValueEur: 1, invoiceNumber: "1",
+    }
+
+    it("throws DhlApiError with verbatim title+detail on 4xx", async () => {
+      global.fetch = jest.fn().mockResolvedValue({
+        ok: false, status: 422,
+        json: async () => ({ title: "Invalid recipient", detail: "Postal code XYZ does not exist" }),
+      }) as unknown as typeof fetch
+      const { DhlExpressClient } = await import("../client")
+      const { DhlApiError } = await import("../types")
+      const client = new DhlExpressClient(baseOptions)
+      await expect(client.createShipment(input)).rejects.toBeInstanceOf(DhlApiError)
+      await expect(client.createShipment(input)).rejects.toMatchObject({
+        status: 422, title: "Invalid recipient", detail: "Postal code XYZ does not exist",
+      })
+    })
+
+    it("retries once on 5xx, then surfaces error", async () => {
+      const fetchMock = jest.fn()
+        .mockResolvedValueOnce({ ok: false, status: 503, json: async () => ({ title: "Service unavailable" }) })
+        .mockResolvedValueOnce({ ok: false, status: 503, json: async () => ({ title: "Service unavailable" }) })
+      global.fetch = fetchMock as unknown as typeof fetch
+      const { DhlExpressClient } = await import("../client")
+      const client = new DhlExpressClient(baseOptions)
+      await expect(client.createShipment(input)).rejects.toMatchObject({ status: 503 })
+      expect(fetchMock).toHaveBeenCalledTimes(2)
+    })
+
+    it("does NOT retry on 429, throws immediately", async () => {
+      const fetchMock = jest.fn().mockResolvedValue({
+        ok: false, status: 429, json: async () => ({ title: "Rate limit" }),
+      })
+      global.fetch = fetchMock as unknown as typeof fetch
+      const { DhlExpressClient } = await import("../client")
+      const client = new DhlExpressClient(baseOptions)
+      await expect(client.createShipment(input)).rejects.toMatchObject({ status: 429 })
+      expect(fetchMock).toHaveBeenCalledTimes(1)
+    })
+  })
 })

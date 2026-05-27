@@ -35,7 +35,7 @@ export class DhlExpressClient {
         imageOptions: [{ typeCode: "label", templateName: "ECOM26_84_001" }],
       },
     }
-    const res = await fetch(`${this.options.baseUrl}/shipments`, {
+    const doFetch = () => fetch(`${this.options.baseUrl}/shipments`, {
       method: "POST",
       headers: {
         "Authorization": this.authHeader(),
@@ -44,6 +44,10 @@ export class DhlExpressClient {
       },
       body: JSON.stringify(body),
     })
+    let res = await doFetch()
+    if (!res.ok && res.status >= 500 && res.status < 600) {
+      res = await doFetch()
+    }
     const json = await res.json()
     if (!res.ok) {
       const { DhlApiError } = await import("./types")
