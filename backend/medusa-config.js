@@ -1,5 +1,6 @@
 import 'lib/instrument';
 import { loadEnv, Modules, defineConfig } from '@medusajs/utils';
+import { DHL_BOXES_MODULE } from './src/modules/dhl-express-boxes';
 import {
   ADMIN_CORS,
   AUTH_CORS,
@@ -170,7 +171,11 @@ const medusaConfig = {
             },
           }]
         : []
-    )
+    ),
+    {
+      key: DHL_BOXES_MODULE,
+      resolve: './src/modules/dhl-express-boxes',
+    },
   ],
   plugins: [
   ...(MEILISEARCH_HOST && MEILISEARCH_ADMIN_KEY ? [{
