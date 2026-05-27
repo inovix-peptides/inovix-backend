@@ -34,6 +34,76 @@ class DhlExpressFulfillmentProviderService extends AbstractFulfillmentProviderSe
   async canCalculate() {
     return false
   }
+
+  async createFulfillment(
+    optionData: Record<string, any>,
+    _items: Array<{ quantity: number }>,
+    context: { order?: any; items?: any[] },
+    data: Record<string, any>,
+  ) {
+    if (data.dhl_tracking_number) {
+      return {
+        data: {
+          ...data,
+          dhl_tracking_number: data.dhl_tracking_number,
+        },
+        labels: [{
+          tracking_number: data.dhl_tracking_number,
+          tracking_url: data.dhl_tracking_url,
+          label_url: this.labelUrlFromBase64(data.dhl_label_pdf_base64),
+        }],
+      }
+    }
+
+    const order = context.order ?? {}
+    const recipient = {
+      name: `${order.shipping_address?.first_name ?? ""} ${order.shipping_address?.last_name ?? ""}`.trim() || "Recipient",
+      street: order.shipping_address?.address_1 ?? "",
+      city: order.shipping_address?.city ?? "",
+      postalCode: order.shipping_address?.postal_code ?? "",
+      countryCode: order.shipping_address?.country_code?.toUpperCase() ?? "NL",
+      phone: order.shipping_address?.phone ?? "+31000000000",
+      email: order.email ?? "",
+    }
+
+    const dims = data.dhl_box_dimensions as { lengthCm: number; widthCm: number; heightCm: number }
+    const productCode = data.dhl_product_code as "H" | "P"
+    const totalEur = typeof order.total === "number" ? order.total / 100 : 0
+
+    const shipment = await this.client.createShipment({
+      productCode,
+      messageReference: data.dhl_request_id,
+      shipper: this.client.options.shipper,
+      recipient,
+      pieces: [{
+        weightKg: data.dhl_total_weight_kg,
+        lengthCm: dims.lengthCm,
+        widthCm: dims.widthCm,
+        heightCm: dims.heightCm,
+      }],
+      declaredValueEur: totalEur,
+      invoiceNumber: String(order.display_id ?? order.id ?? ""),
+    })
+
+    return {
+      data: {
+        ...data,
+        dhl_tracking_number: shipment.trackingNumber,
+        dhl_tracking_url: shipment.shipmentTrackingUrl,
+        dhl_label_pdf_base64: shipment.labelPdfBase64,
+      },
+      labels: [{
+        tracking_number: shipment.trackingNumber,
+        tracking_url: shipment.shipmentTrackingUrl,
+        label_url: this.labelUrlFromBase64(shipment.labelPdfBase64),
+      }],
+    }
+  }
+
+  private labelUrlFromBase64(base64: string | undefined): string {
+    if (!base64) return ""
+    return `data:application/pdf;base64,${base64}`
+  }
 }
 
 export default DhlExpressFulfillmentProviderService

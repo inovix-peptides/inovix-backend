@@ -1,7 +1,7 @@
 import { DhlExpressOptions } from "./types"
 
 export class DhlExpressClient {
-  constructor(private readonly options: DhlExpressOptions) {}
+  constructor(public readonly options: DhlExpressOptions) {}
 
   authHeader(): string {
     const raw = `${this.options.apiKey}:${this.options.apiSecret}`
