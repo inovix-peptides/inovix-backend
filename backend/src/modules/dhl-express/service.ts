@@ -100,6 +100,13 @@ class DhlExpressFulfillmentProviderService extends AbstractFulfillmentProviderSe
     }
   }
 
+  async cancelFulfillment(_data: Record<string, unknown>) {
+    // DHL Express MyDHL API has no void/cancel endpoint. Per DHL guidance, an
+    // unused label is not billed until the parcel is scanned into the network.
+    // Cancellation is purely local: the admin discards the printed label.
+    return {}
+  }
+
   private labelUrlFromBase64(base64: string | undefined): string {
     if (!base64) return ""
     return `data:application/pdf;base64,${base64}`

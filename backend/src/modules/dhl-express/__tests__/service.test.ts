@@ -123,4 +123,20 @@ describe("DhlExpressFulfillmentProviderService", () => {
       labels: [expect.objectContaining({ tracking_number: "AWB-PREV" })],
     })
   })
+
+  it("cancelFulfillment is local-only (does NOT call DHL) and returns empty data", async () => {
+    const { default: DhlExpressService } = await import("../service")
+    const svc: any = new DhlExpressService({} as any, {
+      apiKey: "k", apiSecret: "s", accountNumber: "a",
+      baseUrl: "https://x",
+      shipper: {
+        name: "I", street: "S", city: "A", postalCode: "1",
+        countryCode: "NL", phone: "+31", email: "o@i.com",
+      },
+    })
+    svc.client.createShipment = jest.fn()
+    const result = await svc.cancelFulfillment({ dhl_tracking_number: "AWB-9" })
+    expect(svc.client.createShipment).not.toHaveBeenCalled()
+    expect(result).toEqual({})
+  })
 })
