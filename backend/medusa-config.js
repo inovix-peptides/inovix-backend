@@ -16,8 +16,6 @@ import {
   STORE_CORS,
   STRIPE_API_KEY,
   STRIPE_WEBHOOK_SECRET,
-  MULTISAFEPAY_API_KEY,
-  MULTISAFEPAY_ENVIRONMENT,
   BROKER_URL,
   BROKER_CLIENT_ID,
   BROKER_HMAC_SECRET,
@@ -138,7 +136,6 @@ const medusaConfig = {
     }] : []),
     ...(
       (STRIPE_API_KEY && STRIPE_WEBHOOK_SECRET) ||
-      MULTISAFEPAY_API_KEY ||
       (BROKER_URL && BROKER_CLIENT_ID && BROKER_HMAC_SECRET)
         ? [{
             key: Modules.PAYMENT,
@@ -151,14 +148,6 @@ const medusaConfig = {
                   options: {
                     apiKey: STRIPE_API_KEY,
                     webhookSecret: STRIPE_WEBHOOK_SECRET,
-                  },
-                }] : []),
-                ...(MULTISAFEPAY_API_KEY ? [{
-                  resolve: './src/modules/payment-multisafepay',
-                  id: 'multisafepay',
-                  options: {
-                    apiKey: MULTISAFEPAY_API_KEY,
-                    environment: MULTISAFEPAY_ENVIRONMENT,
                   },
                 }] : []),
                 ...(BROKER_URL && BROKER_CLIENT_ID && BROKER_HMAC_SECRET
