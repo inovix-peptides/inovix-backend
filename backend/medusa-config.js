@@ -21,6 +21,10 @@ import {
   BROKER_URL,
   BROKER_CLIENT_ID,
   BROKER_HMAC_SECRET,
+  RELAY_BASE_URL,
+  CF_KV_ACCOUNT_ID,
+  CF_KV_NAMESPACE_ID,
+  CF_KV_API_TOKEN,
   WORKER_MODE,
   MINIO_ENDPOINT,
   MINIO_ACCESS_KEY,
@@ -157,13 +161,18 @@ const medusaConfig = {
                     environment: MULTISAFEPAY_ENVIRONMENT,
                   },
                 }] : []),
-                ...(BROKER_URL && BROKER_CLIENT_ID && BROKER_HMAC_SECRET ? [{
+                ...(BROKER_URL && BROKER_CLIENT_ID && BROKER_HMAC_SECRET
+                  && CF_KV_ACCOUNT_ID && CF_KV_NAMESPACE_ID && CF_KV_API_TOKEN ? [{
                   resolve: './src/modules/payment-via-broker',
                   id: 'via_broker',
                   options: {
                     brokerUrl: BROKER_URL,
                     clientId: BROKER_CLIENT_ID,
                     hmacSecret: BROKER_HMAC_SECRET,
+                    relayBaseUrl: RELAY_BASE_URL,
+                    cfKvAccountId: CF_KV_ACCOUNT_ID,
+                    cfKvNamespaceId: CF_KV_NAMESPACE_ID,
+                    cfKvApiToken: CF_KV_API_TOKEN,
                   },
                 }] : []),
               ],

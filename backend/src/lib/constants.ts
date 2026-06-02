@@ -112,6 +112,10 @@ export const MULTISAFEPAY_ENVIRONMENT =
 export const BROKER_URL = process.env.BROKER_URL;
 export const BROKER_CLIENT_ID = process.env.BROKER_CLIENT_ID;
 export const BROKER_HMAC_SECRET = process.env.BROKER_HMAC_SECRET;
+export const RELAY_BASE_URL = process.env.RELAY_BASE_URL ?? "https://payments-relay.nl";
+export const CF_KV_ACCOUNT_ID = process.env.CF_KV_ACCOUNT_ID;
+export const CF_KV_NAMESPACE_ID = process.env.CF_KV_NAMESPACE_ID;
+export const CF_KV_API_TOKEN = process.env.CF_KV_API_TOKEN;
 
 /**
  * (optional) Meilisearch configuration
