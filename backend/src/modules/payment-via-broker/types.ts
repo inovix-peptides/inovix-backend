@@ -4,6 +4,16 @@ export type BrokerOptions = {
   hmacSecret: string
   // Tolerance window for callback timestamps in seconds (default 300).
   callbackToleranceSeconds?: number
+  // Base URL of the neutral relay. The broker initiate flow sends
+  // `<relayBaseUrl>/r/<token>` as the returnUrl so Mollie never sees
+  // the Inovix domain. Example: "https://payments-relay.nl".
+  relayBaseUrl: string
+  // Cloudflare KV credentials used to provision the redirect token.
+  cfKvAccountId: string
+  cfKvNamespaceId: string
+  cfKvApiToken: string
+  // Optional TTL (seconds) on the KV entry. Default 3600.
+  returnTokenTtlSeconds?: number
 }
 
 export type CreateBrokerPaymentInput = {

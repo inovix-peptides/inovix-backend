@@ -28,6 +28,7 @@ import type {
 } from "@medusajs/framework/types"
 
 import { BrokerClient } from "./client"
+import { generateToken, writeReturnToken } from "./return-token"
 import type {
   BrokerCallbackBody,
   BrokerOptions,
@@ -77,7 +78,15 @@ class PaymentViaBrokerProviderService extends AbstractPaymentProvider<BrokerOpti
   }
 
   static validateOptions(options: Record<string, unknown>) {
-    for (const key of ["brokerUrl", "clientId", "hmacSecret"] as const) {
+    for (const key of [
+      "brokerUrl",
+      "clientId",
+      "hmacSecret",
+      "relayBaseUrl",
+      "cfKvAccountId",
+      "cfKvNamespaceId",
+      "cfKvApiToken",
+    ] as const) {
       if (!options[key]) {
         throw new MedusaError(
           MedusaError.Types.INVALID_DATA,
@@ -102,9 +111,22 @@ class PaymentViaBrokerProviderService extends AbstractPaymentProvider<BrokerOpti
     const amountMinor = this.toMinorUnit(input.amount, input.currency_code)
     const ref = `pay_${randomToken()}`
     const storefrontUrl = process.env.STOREFRONT_URL
-    const returnUrl = storefrontUrl
-      ? `${storefrontUrl.replace(/\/$/, "")}/checkout/return`
+    const inovixReturn = storefrontUrl
+      ? `${storefrontUrl.replace(/\/$/, "")}/checkout/return?ref=${ref}`
       : "https://invalid.example/return"
+
+    const token = generateToken()
+    await writeReturnToken({
+      token,
+      target: inovixReturn,
+      ttlSeconds: this.options_.returnTokenTtlSeconds ?? 3600,
+      accountId: this.options_.cfKvAccountId,
+      namespaceId: this.options_.cfKvNamespaceId,
+      apiToken: this.options_.cfKvApiToken,
+    })
+
+    const relayBase = this.options_.relayBaseUrl.replace(/\/$/, "")
+    const returnUrl = `${relayBase}/r/${token}`
 
     const created = await this.client_.createPayment({
       ref,
