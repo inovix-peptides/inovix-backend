@@ -8,6 +8,15 @@ const MINUTE = 60 * 1000
 export default defineMiddlewares({
   routes: [
     {
+      // The broker pushes HMAC-signed payment callbacks here. The signature is
+      // computed over the exact raw request bytes, so we must preserve the raw
+      // body | otherwise the provider verifies the HMAC against an empty string
+      // and every callback is rejected as "signature mismatch".
+      matcher: "/payments/broker-callback",
+      method: ["POST"],
+      bodyParser: { preserveRawBody: true },
+    },
+    {
       matcher: "/auth/*",
       middlewares: [
         rateLimit({
