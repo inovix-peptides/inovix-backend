@@ -116,6 +116,7 @@ export default async function seedDhlParcelShipping({ container }: ExecArgs) {
   // 5. Find or create the NL fulfillment set + service zone
   // ------------------------------------------------------------------
   logger.info("Resolving fulfillment set and service zone...");
+  const stockLocationModuleService = container.resolve(Modules.STOCK_LOCATION);
   const existingFulfillmentSets =
     await fulfillmentModuleService.listFulfillmentSets(
       { name: "NL Warehouse delivery" },
@@ -123,9 +124,11 @@ export default async function seedDhlParcelShipping({ container }: ExecArgs) {
     );
 
   let serviceZoneId: string;
+  let fulfillmentSetId: string;
 
   if (existingFulfillmentSets.length > 0) {
     const fs = existingFulfillmentSets[0];
+    fulfillmentSetId = fs.id;
     serviceZoneId = fs.service_zones[0].id;
     logger.info(
       `Using existing fulfillment set: ${fs.id}, service zone: ${serviceZoneId}`
@@ -148,6 +151,7 @@ export default async function seedDhlParcelShipping({ container }: ExecArgs) {
       const nlServiceZone = nlFulfillmentSet.service_zones.find((sz) =>
         sz.geo_zones?.some((gz) => gz.country_code === "nl")
       );
+      fulfillmentSetId = nlFulfillmentSet.id;
       serviceZoneId = nlServiceZone!.id;
       logger.info(
         `Using existing NL service zone: ${serviceZoneId} in fulfillment set: ${nlFulfillmentSet.id}`
@@ -155,10 +159,6 @@ export default async function seedDhlParcelShipping({ container }: ExecArgs) {
     } else {
       logger.info("No NL fulfillment set found — creating one...");
 
-      // Need a stock location to link to
-      const stockLocationModuleService = container.resolve(
-        Modules.STOCK_LOCATION
-      );
       const existingLocations =
         await stockLocationModuleService.listStockLocations({});
       let stockLocation = existingLocations[0] ?? null;
@@ -201,6 +201,7 @@ export default async function seedDhlParcelShipping({ container }: ExecArgs) {
           ],
         });
 
+      fulfillmentSetId = fulfillmentSet.id;
       serviceZoneId = fulfillmentSet.service_zones[0].id;
       logger.info(
         `Created fulfillment set: ${fulfillmentSet.id}, service zone: ${serviceZoneId}`
@@ -215,17 +216,62 @@ export default async function seedDhlParcelShipping({ container }: ExecArgs) {
           fulfillment_set_id: fulfillmentSet.id,
         },
       });
-
-      // Link stock location to dhl-parcel provider
-      await link.create({
-        [Modules.STOCK_LOCATION]: {
-          stock_location_id: stockLocation.id,
-        },
-        [Modules.FULFILLMENT]: {
-          fulfillment_provider_id: DHL_PROVIDER_ID,
-        },
-      });
     }
+  }
+
+  // ------------------------------------------------------------------
+  // 5b. Ensure the dhl-parcel provider is enabled at the stock location that
+  //     backs this fulfillment set. Medusa only surfaces a shipping option in
+  //     the cart when its provider is linked to a location in the option's
+  //     service zone. The original seed created this link ONLY when it created
+  //     a brand-new fulfillment set; on an existing store (which already has an
+  //     NL-capable set, e.g. the base seed's "European Warehouse delivery") we
+  //     land in a reuse branch above, so without this step the DHL options are
+  //     created but never appear at checkout. Idempotent: re-running is a no-op.
+  // ------------------------------------------------------------------
+  logger.info(
+    "Ensuring dhl-parcel provider is linked to the stock location..."
+  );
+  let stockLocationId: string | undefined;
+  try {
+    const query = container.resolve(ContainerRegistrationKeys.QUERY);
+    const { data: stockLocations } = await query.graph({
+      entity: "stock_location",
+      fields: ["id", "fulfillment_sets.id"],
+    });
+    const owningLocation = stockLocations.find((loc: any) =>
+      loc.fulfillment_sets?.some((fs: any) => fs.id === fulfillmentSetId)
+    );
+    stockLocationId = owningLocation?.id ?? stockLocations[0]?.id;
+  } catch (e: any) {
+    logger.info(
+      `Link lookup via query failed (${e?.message}); falling back to first stock location.`
+    );
+    const locs = await stockLocationModuleService.listStockLocations({});
+    stockLocationId = locs[0]?.id;
+  }
+
+  if (!stockLocationId) {
+    logger.error(
+      "No stock location found to link the dhl-parcel provider to — aborting before creating options."
+    );
+    return;
+  }
+
+  try {
+    await link.create({
+      [Modules.STOCK_LOCATION]: { stock_location_id: stockLocationId },
+      [Modules.FULFILLMENT]: { fulfillment_provider_id: DHL_PROVIDER_ID },
+    });
+    logger.info(
+      `Linked dhl-parcel provider to stock location ${stockLocationId}.`
+    );
+  } catch (e: any) {
+    logger.info(
+      `dhl-parcel provider link already present or non-fatal: ${
+        e?.message ?? "exists"
+      }`
+    );
   }
 
   // ------------------------------------------------------------------
