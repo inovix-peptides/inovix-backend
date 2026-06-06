@@ -180,6 +180,10 @@ const medusaConfig = {
         ],
       },
     },
+    {
+      key: 'dhl_parcel_boxes',
+      resolve: './src/modules/dhl-parcel-boxes',
+    },
   ],
   plugins: [
   ...(MEILISEARCH_HOST && MEILISEARCH_ADMIN_KEY ? [{
