@@ -166,7 +166,9 @@ function CreateLabelPrompt({
         <Prompt.Header>
           <Prompt.Title>DHL-label aanmaken</Prompt.Title>
           <Prompt.Description>
-            Dit maakt een echt label en DHL belast je account. Doorgaan?
+            Hiermee maak je een echt DHL-label aan. In LIVE-modus belast DHL je
+            account voor de verzendkosten; in testmodus is het label gratis en
+            wordt het niet daadwerkelijk verzonden. Doorgaan?
           </Prompt.Description>
         </Prompt.Header>
         <Prompt.Footer>
@@ -229,7 +231,10 @@ function SendEmailPrompt({
         <Prompt.Header>
           <Prompt.Title>Verzendmail sturen</Prompt.Title>
           <Prompt.Description>
-            Verzendmail naar klant sturen? Dit is eenmalig.
+            Dit stuurt de klant eenmalig de verzendmail met de track-and-trace
+            link. De klant ontvangt deze mail slechts eenmaal; stuur hem niet
+            opnieuw tenzij de klant aangeeft hem niet ontvangen te hebben.
+            Doorgaan?
           </Prompt.Description>
         </Prompt.Header>
         <Prompt.Footer>
@@ -352,7 +357,13 @@ const OrderDhlParcelWidget = ({ data }: DetailWidgetProps<AdminOrder>) => {
       <>
         <Container className="divide-y p-0">
           <div className="flex items-center justify-between px-6 py-4">
-            <Heading level="h2">DHL Parcel NL</Heading>
+            <div className="flex flex-col gap-1">
+              <Heading level="h2">DHL Parcel NL</Heading>
+              <Text size="small" className="text-ui-fg-subtle">
+                Het label is aangemaakt. Download het of stuur de klant de
+                verzendmail.
+              </Text>
+            </div>
           </div>
           <div className="flex flex-col gap-3 px-6 py-4">
             {/* Option badge */}
@@ -429,7 +440,12 @@ const OrderDhlParcelWidget = ({ data }: DetailWidgetProps<AdminOrder>) => {
     <>
       <Container className="divide-y p-0">
         <div className="flex items-center justify-between px-6 py-4">
-          <Heading level="h2">DHL Parcel NL</Heading>
+          <div className="flex flex-col gap-1">
+            <Heading level="h2">DHL Parcel NL</Heading>
+            <Text size="small" className="text-ui-fg-subtle">
+              Maak hier het DHL-verzendlabel voor deze bestelling.
+            </Text>
+          </div>
         </div>
         <div className="flex flex-col gap-3 px-6 py-4">
           {/* Option badge */}

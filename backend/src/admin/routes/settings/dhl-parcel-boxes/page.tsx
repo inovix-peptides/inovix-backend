@@ -213,6 +213,11 @@ function BoxModal({ open, onOpenChange, editPreset, onSaved }: BoxModalProps) {
           </div>
 
           {/* Dimensions row */}
+          <div className="flex flex-col gap-1">
+          <Text size="xsmall" className="text-ui-fg-subtle">
+            Afmetingen van de doos in centimeters. Vul de werkelijke buitenmaten in.
+          </Text>
+          </div>
           <div className="grid grid-cols-3 gap-4">
             <div className="flex flex-col gap-1">
               <Label htmlFor="box-length" size="small" weight="plus">
@@ -287,6 +292,10 @@ function BoxModal({ open, onOpenChange, editPreset, onSaved }: BoxModalProps) {
               onChange={(e) => setField("max_items", e.target.value)}
               placeholder="5"
             />
+            <Text size="xsmall" className="text-ui-fg-subtle">
+              Het maximale aantal producten dat in deze doos past. DHL kiest de
+              kleinste doos die past.
+            </Text>
             {errors.max_items && (
               <Text size="xsmall" className="text-ui-fg-error">
                 {errors.max_items}
@@ -314,6 +323,11 @@ function BoxModal({ open, onOpenChange, editPreset, onSaved }: BoxModalProps) {
                 ))}
               </Select.Content>
             </Select>
+            <Text size="xsmall" className="text-ui-fg-subtle">
+              Kies het DHL-type dat overeenkomt met de fysieke doos. DHL NL B2C types:
+              XSMALL: 0-2 kg (max 38 x 26 x 3 cm) | SMALL: 0-10 kg |
+              SMALL_MEDIUM: 10-20 kg | MEDIUM: 20-31 kg. Er is geen LARGE.
+            </Text>
             {errors.parcel_type_key && (
               <Text size="xsmall" className="text-ui-fg-error">
                 {errors.parcel_type_key}
@@ -479,9 +493,11 @@ const DhlParcelBoxesPage = () => {
           <div className="flex flex-col gap-1">
             <Heading level="h1">DHL doosformaten</Heading>
             <Text size="small" className="text-ui-fg-subtle">
-              Beheer de beschikbare doosformaten voor DHL Parcel NL. Het
-              systeem kiest automatisch het kleinste passende formaat per
-              bestelling.
+              Hier stel je in welke doosformaten je gebruikt voor DHL Parcel NL.
+              Per bestelling kiest het systeem automatisch het kleinste formaat
+              waarbij alle producten passen, op basis van het maximale aantal
+              items per doos. Maak voor elke doosgrootte die je fysiek op
+              voorraad hebt een eigen preset aan.
             </Text>
           </div>
           <Button variant="primary" size="small" onClick={openCreate}>
