@@ -43,7 +43,7 @@ export class BrokerClient {
       ref: string
       checkout_url: string
       status: BrokerStatus
-    }>("/store/external-payments", {
+    }>("/external-payments", {
       method: "POST",
       body,
       idempotencyKey: input.idempotencyKey,
@@ -68,7 +68,7 @@ export class BrokerClient {
       status: BrokerStatus
       mollie_payment_id?: string | null
       captured_at?: string | null
-    }>(`/store/external-payments/${encodeURIComponent(ref)}`, { method: "GET" })
+    }>(`/external-payments/${encodeURIComponent(ref)}`, { method: "GET" })
 
     return {
       ref: data.ref,
@@ -84,7 +84,7 @@ export class BrokerClient {
       currency: currencyCode.toUpperCase(),
     })
     await this.fetchJson<unknown>(
-      `/store/external-payments/${encodeURIComponent(ref)}/refund`,
+      `/external-payments/${encodeURIComponent(ref)}/refund`,
       { method: "POST", body }
     )
   }

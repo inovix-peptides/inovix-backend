@@ -94,17 +94,6 @@ export const STRIPE_API_KEY = process.env.STRIPE_API_KEY;
 export const STRIPE_WEBHOOK_SECRET = process.env.STRIPE_WEBHOOK_SECRET;
 
 /**
- * (optional) MultiSafepay configuration
- *
- * Inovix payments are routed through Tencore's MultiSafepay merchant account
- * (apparel + research peptides MCCs disclosed at onboarding). The provider
- * only registers when MULTISAFEPAY_API_KEY is set.
- */
-export const MULTISAFEPAY_API_KEY = process.env.MULTISAFEPAY_API_KEY;
-export const MULTISAFEPAY_ENVIRONMENT =
-  (process.env.MULTISAFEPAY_ENVIRONMENT as "production" | "test" | undefined) ?? "production";
-
-/**
  * (optional) Payments routed through an external broker (tenant of an MoR
  * payments aggregator). Code references the broker generically; the env
  * value names the operator-visible URL.
@@ -112,6 +101,10 @@ export const MULTISAFEPAY_ENVIRONMENT =
 export const BROKER_URL = process.env.BROKER_URL;
 export const BROKER_CLIENT_ID = process.env.BROKER_CLIENT_ID;
 export const BROKER_HMAC_SECRET = process.env.BROKER_HMAC_SECRET;
+export const RELAY_BASE_URL = process.env.RELAY_BASE_URL ?? "https://payments-relay.nl";
+export const CF_KV_ACCOUNT_ID = process.env.CF_KV_ACCOUNT_ID;
+export const CF_KV_NAMESPACE_ID = process.env.CF_KV_NAMESPACE_ID;
+export const CF_KV_API_TOKEN = process.env.CF_KV_API_TOKEN;
 
 /**
  * (optional) Meilisearch configuration
