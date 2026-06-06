@@ -129,37 +129,3 @@ export const WORKER_MODE =
  * Disable Admin
  */
 export const SHOULD_DISABLE_ADMIN = process.env.MEDUSA_DISABLE_ADMIN === 'true'
-
-/**
- * DHL Express MyDHL API key (issued by DHL after certification).
- */
-export const DHL_EXPRESS_API_KEY = process.env.DHL_EXPRESS_API_KEY ?? ''
-
-/**
- * DHL Express MyDHL API secret.
- */
-export const DHL_EXPRESS_API_SECRET = process.env.DHL_EXPRESS_API_SECRET ?? ''
-
-/**
- * DHL Express account / shipper number from the contract.
- */
-export const DHL_EXPRESS_ACCOUNT_NUMBER = process.env.DHL_EXPRESS_ACCOUNT_NUMBER ?? ''
-
-/**
- * Base URL for MyDHL API. Defaults to test environment.
- */
-export const DHL_EXPRESS_API_BASE_URL =
-  process.env.DHL_EXPRESS_API_BASE_URL ?? 'https://express.api.dhl.com/mydhlapi/test'
-
-/**
- * Shipper (Inovix warehouse) address embedded on every DHL label.
- */
-export const DHL_EXPRESS_SHIPPER = {
-  name: process.env.DHL_EXPRESS_SHIPPER_NAME ?? '',
-  street: process.env.DHL_EXPRESS_SHIPPER_STREET ?? '',
-  city: process.env.DHL_EXPRESS_SHIPPER_CITY ?? '',
-  postalCode: process.env.DHL_EXPRESS_SHIPPER_POSTAL_CODE ?? '',
-  countryCode: process.env.DHL_EXPRESS_SHIPPER_COUNTRY_CODE ?? 'NL',
-  phone: process.env.DHL_EXPRESS_SHIPPER_PHONE ?? '',
-  email: process.env.DHL_EXPRESS_SHIPPER_EMAIL ?? '',
-}

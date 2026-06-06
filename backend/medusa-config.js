@@ -1,6 +1,5 @@
 import 'lib/instrument';
 import { loadEnv, Modules, defineConfig } from '@medusajs/utils';
-import { DHL_BOXES_MODULE } from './src/modules/dhl-express-boxes';
 import {
   ADMIN_CORS,
   AUTH_CORS,
@@ -30,11 +29,6 @@ import {
   MINIO_PUBLIC_URL,
   MEILISEARCH_HOST,
   MEILISEARCH_ADMIN_KEY,
-  DHL_EXPRESS_API_KEY,
-  DHL_EXPRESS_API_SECRET,
-  DHL_EXPRESS_ACCOUNT_NUMBER,
-  DHL_EXPRESS_API_BASE_URL,
-  DHL_EXPRESS_SHIPPER,
 } from 'lib/constants';
 
 loadEnv(process.env.NODE_ENV, process.cwd());
@@ -178,25 +172,10 @@ const medusaConfig = {
         : []
     ),
     {
-      key: DHL_BOXES_MODULE,
-      resolve: './src/modules/dhl-express-boxes',
-    },
-    {
       key: Modules.FULFILLMENT,
       resolve: '@medusajs/medusa/fulfillment',
       options: {
         providers: [
-          {
-            resolve: './src/modules/dhl-express',
-            id: 'dhl-express',
-            options: {
-              apiKey: DHL_EXPRESS_API_KEY,
-              apiSecret: DHL_EXPRESS_API_SECRET,
-              accountNumber: DHL_EXPRESS_ACCOUNT_NUMBER,
-              baseUrl: DHL_EXPRESS_API_BASE_URL,
-              shipper: DHL_EXPRESS_SHIPPER,
-            },
-          },
           { resolve: '@medusajs/medusa/fulfillment-manual', id: 'manual' },
         ],
       },
