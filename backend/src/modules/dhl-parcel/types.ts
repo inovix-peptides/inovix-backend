@@ -5,9 +5,18 @@ export type DhlParcelOptionKey =
   | 'EVE'       // evening delivery (unused v1)
   | 'INS'       // insurance (unused v1, off by default)
   | 'REFERENCE' // custom reference on label
-  | 'HANDT'     // signature required (verify key via /capabilities before relying)
+  | 'HANDT'     // signature required (DOOR only — mutually exclusive with PS per /capabilities)
 
-export type DhlParcelParcelType = 'SMALL' | 'MEDIUM' | 'LARGE'
+// Parcel type keys as returned by DHL Parcel /capabilities/business endpoint
+// (NL-to-NL, B2C, verified 2026-06-06):
+//   XSMALL  0–2 kg,    max 38×26×3 cm
+//   SMALL   0–10 kg,   max 80×60×50 cm
+//   SMALL_MEDIUM  10–20 kg, max 80×60×50 cm
+//   MEDIUM  20–31 kg,  max 180×100×50 cm
+// NOTE: 'LARGE' does NOT exist in DHL's API. The box-preset enum and migration
+// must be updated before Task 22 to remove LARGE and add XSMALL + SMALL_MEDIUM.
+// See task report for details.
+export type DhlParcelParcelType = 'XSMALL' | 'SMALL' | 'SMALL_MEDIUM' | 'MEDIUM'
 
 export interface DhlParcelAddress {
   countryCode: string

@@ -26,7 +26,7 @@ import buildPayload from "../steps/build-payload"
 const presets = [
   { id: "box_s", parcel_type_key: "SMALL", max_items: 2, name: "Small", length_cm: 20, width_cm: 15, height_cm: 8 },
   { id: "box_m", parcel_type_key: "MEDIUM", max_items: 5, name: "Medium", length_cm: 28, width_cm: 20, height_cm: 12 },
-  { id: "box_l", parcel_type_key: "LARGE", max_items: 10, name: "Large", length_cm: 40, width_cm: 30, height_cm: 20 },
+  { id: "box_l", parcel_type_key: "SMALL_MEDIUM", max_items: 10, name: "Small-Medium", length_cm: 40, width_cm: 30, height_cm: 20 },
 ]
 
 function makeContainer(p = presets) {
@@ -104,7 +104,7 @@ describe("build-payload step (DHL Parcel)", () => {
       { quantity: 15, product: { id: "p1", weight: 100 } },
     ])
     const result = await buildPayload({ order } as any, { container: makeContainer() } as any)
-    expect(result.output.dhl_parcel_type_key).toBe("LARGE")
+    expect(result.output.dhl_parcel_type_key).toBe("SMALL_MEDIUM")
   })
 
   it("reads dhl_option from the DHL Parcel method even when a non-DHL method is at index 0", async () => {

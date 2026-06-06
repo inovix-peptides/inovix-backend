@@ -10,7 +10,8 @@ const DHL_PARCEL_BOXES_MODULE = "dhl_parcel_boxes"
 type BoxPreset = {
   id: string
   name: string
-  parcel_type_key: "SMALL" | "MEDIUM" | "LARGE"
+  // Real DHL keys confirmed 2026-06-06: LARGE does not exist; XSMALL and SMALL_MEDIUM do.
+  parcel_type_key: "XSMALL" | "SMALL" | "SMALL_MEDIUM" | "MEDIUM"
   max_items: number
   length_cm: number
   width_cm: number

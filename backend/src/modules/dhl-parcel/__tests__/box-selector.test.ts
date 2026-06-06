@@ -34,10 +34,12 @@ describe('sumOrderWeightGrams', () => {
 })
 
 describe('suggestBoxPreset', () => {
+  // Parcel type keys updated to match real DHL API (confirmed 2026-06-06):
+  // LARGE does not exist; SMALL_MEDIUM covers the 10–20 kg band.
   const presets = [
     { parcel_type_key: 'SMALL', max_items: 2, name: 'Small Box' },
     { parcel_type_key: 'MEDIUM', max_items: 5, name: 'Medium Box' },
-    { parcel_type_key: 'LARGE', max_items: 10, name: 'Large Box' },
+    { parcel_type_key: 'SMALL_MEDIUM', max_items: 10, name: 'Small-Medium Box' },
   ]
 
   it('picks the smallest preset whose max_items >= totalUnits, with overflow false', () => {
@@ -51,7 +53,7 @@ describe('suggestBoxPreset', () => {
   it('returns the largest preset with overflow true when totalUnits exceeds all max_items', () => {
     const result = suggestBoxPreset(presets, 15)
     expect(result.overflow).toBe(true)
-    expect(result.preset.parcel_type_key).toBe('LARGE')
+    expect(result.preset.parcel_type_key).toBe('SMALL_MEDIUM')
     expect(result.preset.max_items).toBe(10)
   })
 

@@ -152,13 +152,17 @@ class DhlParcelFulfillmentProviderService extends AbstractFulfillmentProviderSer
     // 8. Account id.
     const accountId = (await this.client.getAccountNumbers())[0]
 
-    // 9. Delivery + reference options (PS sent exactly once, carrying the
-    //    service point id; no signature/HANDT option yet).
+    // 9. Delivery + reference + signature options.
+    //    HANDT (signature on delivery) is confirmed by live /capabilities call
+    //    (2026-06-06, sandbox) and is MUTUALLY EXCLUSIVE with PS: the capabilities
+    //    response lists PS in HANDT's exclusions array. Therefore HANDT is added
+    //    only for DOOR shipments.
     const options: DhlParcelOption[] = [
       data.dhl_option === "PS"
         ? { key: "PS", input: data.service_point_id }
         : { key: "DOOR" },
       { key: "REFERENCE", input: String(ord.display_id) },
+      ...(data.dhl_option !== "PS" ? [{ key: "HANDT" } as DhlParcelOption] : []),
     ]
 
     // 10. Pieces.

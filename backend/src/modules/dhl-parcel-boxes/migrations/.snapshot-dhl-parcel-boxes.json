@@ -68,9 +68,10 @@
           "primary": false,
           "nullable": false,
           "enumItems": [
+            "XSMALL",
             "SMALL",
-            "MEDIUM",
-            "LARGE"
+            "SMALL_MEDIUM",
+            "MEDIUM"
           ],
           "mappedType": "enum"
         },

@@ -196,10 +196,11 @@ describe("DhlParcelFulfillmentProviderService", () => {
       phoneNumber: "+31600000000",
     })
 
-    // options: DOOR + REFERENCE (no duplicates)
+    // options: DOOR + REFERENCE + HANDT (signature required; HANDT only on DOOR per capabilities)
     expect(input.options).toEqual([
       { key: "DOOR" },
       { key: "REFERENCE", input: "1042" },
+      { key: "HANDT" },
     ])
 
     // pieces: weight from items (2 * 150 = 300), dimensions from data
@@ -264,6 +265,7 @@ describe("DhlParcelFulfillmentProviderService", () => {
     await svc.createFulfillment(data, SAMPLE_ITEMS, sampleOrder(), {})
 
     const input = client.createLabel.mock.calls[0][0]
+    // PS shipments do NOT get HANDT (mutually exclusive per DHL capabilities)
     expect(input.options).toEqual([
       { key: "PS", input: "sp-999" },
       { key: "REFERENCE", input: "1042" },
@@ -271,6 +273,8 @@ describe("DhlParcelFulfillmentProviderService", () => {
 
     const psCount = input.options.filter((o: { key: string }) => o.key === "PS").length
     expect(psCount).toBe(1)
+    const handtCount = input.options.filter((o: { key: string }) => o.key === "HANDT").length
+    expect(handtCount).toBe(0)
   })
 
   // ─── Test 7: cancelFulfillment logs via container logger, never throws ────────

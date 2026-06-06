@@ -1,4 +1,6 @@
-const VALID_PARCEL_TYPE_KEYS = ['SMALL', 'MEDIUM', 'LARGE'] as const
+// Confirmed real DHL Parcel keys (2026-06-06, sandbox /capabilities/business NL-to-NL):
+// LARGE does not exist; XSMALL (0-2kg) and SMALL_MEDIUM (10-20kg) do.
+const VALID_PARCEL_TYPE_KEYS = ['XSMALL', 'SMALL', 'SMALL_MEDIUM', 'MEDIUM'] as const
 
 function isPositiveNumber(v: unknown): boolean {
   return typeof v === 'number' && isFinite(v) && v > 0

@@ -75,8 +75,8 @@ describe('validateCreate', () => {
     expect(validateCreate({ ...validBody, parcel_type_key: 'MEDIUM' })).toEqual([])
   })
 
-  it('accepts LARGE as parcel_type_key', () => {
-    expect(validateCreate({ ...validBody, parcel_type_key: 'LARGE' })).toEqual([])
+  it('accepts XSMALL as parcel_type_key', () => {
+    expect(validateCreate({ ...validBody, parcel_type_key: 'XSMALL' })).toEqual([])
   })
 })
 
@@ -90,7 +90,7 @@ describe('validateUpdate', () => {
   })
 
   it('passes for a partial valid body (only parcel_type_key)', () => {
-    expect(validateUpdate({ parcel_type_key: 'LARGE' })).toEqual([])
+    expect(validateUpdate({ parcel_type_key: 'SMALL_MEDIUM' })).toEqual([])
   })
 
   it('passes for an empty body (no-op update)', () => {
