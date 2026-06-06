@@ -33,6 +33,7 @@ jest.mock('@medusajs/framework/utils', () => ({
   },
 }))
 
+import ReactDOMServer from 'react-dom/server'
 import { generateEmailTemplate } from '../templates'
 import { isInviteUserData } from '../templates/invite-user'
 import { isOrderPlacedTemplateData } from '../templates/order-placed'
@@ -103,6 +104,63 @@ describe('generateEmailTemplate', () => {
       expect(() =>
         generateEmailTemplate('order-placed', { order: { id: 'o1' } })
       ).toThrow('Invalid data for template "order-placed"')
+    })
+  })
+
+  describe('order-shipped template', () => {
+    const validShippedData = {
+      order: {
+        id: 'order_456',
+        display_id: 'ORD-456',
+        email: 'buyer@example.com',
+        currency_code: 'EUR',
+      },
+      shippingAddress: {
+        first_name: 'Jan',
+        last_name: 'de Vries',
+        address_1: 'Teststraat 1',
+        city: 'Amsterdam',
+        province: '',
+        postal_code: '1011 AB',
+        country_code: 'NL',
+      },
+      labels: [
+        {
+          tracking_number: 'JVGL01234567890',
+          tracking_url: 'https://www.dhlecommerce.nl/nl/consumer/track-and-trace?key=JVGL01234567890+1011AB',
+          label_url: null,
+        },
+      ],
+      items: [
+        { id: 'item-1', title: 'BPC-157 10mg', quantity: 1 },
+      ],
+      shippedAt: new Date().toISOString(),
+    }
+
+    it('renders "Volg je pakket" button with tracking_url href when label has tracking_url', () => {
+      const node = generateEmailTemplate('order-shipped', validShippedData)
+      const html = ReactDOMServer.renderToStaticMarkup(node as React.ReactElement)
+
+      expect(html).toContain('Volg je pakket')
+      expect(html).toContain('https://www.dhlecommerce.nl/nl/consumer/track-and-trace?key=JVGL01234567890+1011AB')
+    })
+
+    it('still shows tracking number when no tracking_url is present', () => {
+      const dataNoUrl = {
+        ...validShippedData,
+        labels: [{ tracking_number: 'JVGL09999999999', tracking_url: null, label_url: null }],
+      }
+      const node = generateEmailTemplate('order-shipped', dataNoUrl)
+      const html = ReactDOMServer.renderToStaticMarkup(node as React.ReactElement)
+
+      expect(html).toContain('JVGL09999999999')
+      expect(html).not.toContain('Volg je pakket')
+    })
+
+    it('throws MedusaError when required fields are missing', () => {
+      expect(() =>
+        generateEmailTemplate('order-shipped', { order: {}, labels: [] })
+      ).toThrow('Invalid data for template "order-shipped"')
     })
   })
 

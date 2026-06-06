@@ -1,4 +1,4 @@
-import { Text, Section, Hr, Row, Column, Link } from '@react-email/components'
+import { Text, Section, Hr, Row, Column, Link, Button } from '@react-email/components'
 import * as React from 'react'
 import { Base } from './base'
 import { OrderDTO, OrderAddressDTO } from '@medusajs/framework/types'
@@ -88,13 +88,16 @@ export const OrderShippedTemplate: React.FC<OrderShippedTemplateProps> & {
         <>
           <Hr className="border border-solid border-[#eaeaea] my-[20px] mx-0 w-full" />
           <Section>
-            <Text className="text-black text-[13px] font-semibold uppercase tracking-wide m-0 mb-[8px]">
-              Track en trace
+            <Text className="text-black text-[15px] font-semibold leading-[24px] m-0 mb-[4px]">
+              Je pakket is onderweg
+            </Text>
+            <Text className="text-[#666666] text-[13px] leading-[20px] m-0 mb-[16px]">
+              Gebruik de knop hieronder om je zending live te volgen.
             </Text>
             {trackedLabels.map((label, idx) => (
-              <Section key={idx} className="mb-[8px]">
+              <Section key={idx} className="mb-[16px]">
                 {label.tracking_number ? (
-                  <Text className="text-black text-[13px] leading-[20px] m-0">
+                  <Text className="text-black text-[13px] leading-[20px] m-0 mb-[12px]">
                     Trackingnummer:{' '}
                     <span className="font-semibold">
                       {label.tracking_number}
@@ -102,14 +105,22 @@ export const OrderShippedTemplate: React.FC<OrderShippedTemplateProps> & {
                   </Text>
                 ) : null}
                 {label.tracking_url ? (
-                  <Text className="text-[13px] leading-[20px] m-0">
-                    <Link
-                      href={label.tracking_url}
-                      className="text-black underline"
-                    >
-                      Volg uw zending
-                    </Link>
-                  </Text>
+                  <Button
+                    href={label.tracking_url}
+                    style={{
+                      backgroundColor: '#000000',
+                      color: '#ffffff',
+                      padding: '12px 24px',
+                      fontSize: '14px',
+                      fontWeight: '600',
+                      lineHeight: '20px',
+                      textDecoration: 'none',
+                      display: 'inline-block',
+                      borderRadius: '0px',
+                    }}
+                  >
+                    Volg je pakket
+                  </Button>
                 ) : null}
               </Section>
             ))}
@@ -192,8 +203,8 @@ OrderShippedTemplate.PreviewProps = {
   } as OrderAddressDTO,
   labels: [
     {
-      tracking_number: '3SABCD1234567',
-      tracking_url: 'https://postnl.nl/track?code=3SABCD1234567',
+      tracking_number: 'JVGL01234567890',
+      tracking_url: 'https://www.dhlecommerce.nl/nl/consumer/track-and-trace?key=JVGL01234567890+1011AB',
       label_url: null,
     },
   ],
