@@ -52,16 +52,11 @@ const SAMPLE_LABEL_INPUT: DhlParcelCreateLabelInput = {
 }
 
 const SAMPLE_LABEL_RESPONSE: DhlParcelLabelResponse = {
+  labelId: "label-abc",
   shipmentId: "shipment-abc",
-  shipmentTrackerCode: "JVGL123456789NL",
-  pieces: [
-    {
-      labelId: "label-piece-1",
-      trackerCode: "JVGL123456789NL",
-      parcelType: "MEDIUM",
-      pieceNumber: 1,
-    },
-  ],
+  parcelType: "MEDIUM",
+  pieceNumber: 1,
+  trackerCode: "JVGL123456789NL",
 }
 
 const SAMPLE_SERVICE_POINTS: DhlParcelServicePoint[] = [

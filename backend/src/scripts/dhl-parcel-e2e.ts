@@ -1,8 +1,10 @@
 /**
  * DHL Parcel NL | end-to-end sandbox smoke test
  *
- * Targets the SANDBOX only: DHL_PARCEL_API_BASE_URL must be
- * https://api-gw-accept.dhlparcel.nl  (never the prod URL).
+ * Runs against the configured DHL_PARCEL_API_BASE_URL. Label creation is
+ * permitted on the accept sandbox, OR on the prod gateway ONLY with a
+ * keyDesc:test key (non-billable test labels). A live key on prod is refused
+ * by the safety gate that runs after authentication.
  *
  * Run:
  *   pnpm exec ts-node --transpile-only \
@@ -54,17 +56,10 @@ async function main(): Promise<void> {
     process.exit(1)
   }
 
-  if (!baseUrl.includes("api-gw-accept")) {
-    console.error(
-      "SAFETY ABORT: DHL_PARCEL_API_BASE_URL does not look like the sandbox URL.\n" +
-      "  Got:      " + baseUrl + "\n" +
-      "  Expected: https://api-gw-accept.dhlparcel.nl\n" +
-      "Refusing to run against production (a real label would be created and billed).",
-    )
-    process.exit(1)
-  }
+  // The env safety gate runs AFTER auth (we need the token's keyDesc to tell a
+  // test key from a live key on the prod gateway). See the check after Step 1.
 
-  console.log(`Sandbox URL: ${baseUrl}`)
+  console.log(`API base URL: ${baseUrl}`)
   console.log(`User ID:     ${userId}`)
   console.log()
 
@@ -106,6 +101,24 @@ async function main(): Promise<void> {
 
     process.exit(1)
   }
+
+  // ── Safety gate: label creation allowed on accept sandbox, or prod ONLY with keyDesc:test ──
+  const rawToken = await tokenCache.getToken()
+  let keyDesc = "unknown"
+  try {
+    const seg = rawToken.split(".")[1].replace(/-/g, "+").replace(/_/g, "/")
+    keyDesc = (JSON.parse(Buffer.from(seg, "base64").toString()).keyDesc as string) ?? "unknown"
+  } catch {
+    /* leave keyDesc unknown */
+  }
+  const isAccept = baseUrl.includes("api-gw-accept")
+  if (!isAccept && keyDesc !== "test") {
+    fail("Safety gate", `prod gateway + non-test key (keyDesc=${keyDesc})`)
+    console.error("  Refusing: a label here would be a REAL, billed shipment.")
+    console.error("  Use the accept sandbox, or a keyDesc:test key on the prod gateway.")
+    process.exit(1)
+  }
+  info(`Environment OK: ${isAccept ? "accept sandbox" : "prod gateway"}, keyDesc=${keyDesc} (test label, non-billable)`)
 
   // ── Step 2: List ServicePoints near 1011AC ─────────────────────────────────
 
@@ -155,6 +168,7 @@ async function main(): Promise<void> {
           city: "Amsterdam",
           street: "Prins Hendrikkade",
           number: "108",
+          isBusiness: false,
         },
         email: "test-ontvanger@example.com",
         phoneNumber: "+31612345678",
@@ -167,13 +181,14 @@ async function main(): Promise<void> {
           city: "Amsterdam",
           street: "Teststraat",
           number: "1",
+          isBusiness: true,
         },
         email: "verzending@inovix-peptides.nl",
         phoneNumber: "+31698765432",
       },
     })
 
-    trackingNumber = labelResp.pieces?.[0]?.trackerCode ?? labelResp.shipmentTrackerCode
+    trackingNumber = labelResp.trackerCode
     labelPdfBase64 = labelResp.pdf
 
     pass("Step 3: Create label", `trackingNumber=${trackingNumber}`)
@@ -243,7 +258,7 @@ async function main(): Promise<void> {
     console.log(`Tracking number: ${trackingNumber}`)
     const postcode = "1011AC"
     console.log(
-      `Tracking URL:    https://parcels.dhl.nl/dhlparcel/tracking?key=${trackingNumber}+${postcode}`,
+      `Tracking URL:    https://www.dhlecommerce.nl/nl/consumer/track-and-trace?key=${trackingNumber}+${postcode}`,
     )
   }
 }

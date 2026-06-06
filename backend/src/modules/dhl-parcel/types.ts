@@ -64,15 +64,16 @@ export interface DhlParcelCreateLabelInput {
 }
 
 export interface DhlParcelLabelResponse {
+  labelId: string
   shipmentId: string
-  shipmentTrackerCode: string
-  pieces: Array<{
-    labelId: string
-    trackerCode: string
-    parcelType: string
-    pieceNumber: number
-  }>
-  pdf?: string  // base64; present when Accept: application/pdf or for /labels POST
+  parcelType: string
+  labelType?: string
+  pieceNumber?: number
+  trackerCode: string  // tracking barcode (TOP-LEVEL; the /labels response is a single flat piece, verified live)
+  routingCode?: string
+  orderReference?: string
+  pdf?: string  // base64 PDF, present in the POST /labels response
+  timeCreated?: string
 }
 
 export interface DhlParcelServicePoint {

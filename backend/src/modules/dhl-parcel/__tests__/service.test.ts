@@ -72,11 +72,12 @@ async function makeService(client: MockClient, logger = makeLogger()) {
 }
 
 const SAMPLE_LABEL_RESPONSE = {
+  labelId: "label-abc",
   shipmentId: "shipment-abc",
-  shipmentTrackerCode: "JVGL0123456789NL",
-  pieces: [
-    { labelId: "label-piece-1", trackerCode: "JVGL0123456789NL", parcelType: "MEDIUM", pieceNumber: 1 },
-  ],
+  parcelType: "MEDIUM",
+  pieceNumber: 1,
+  trackerCode: "JVGL0123456789NL",
+  routingCode: "2LNL1011DL+00540000",
   pdf: "JVBERi0xLjQ=",
 }
 

@@ -181,7 +181,7 @@ class DhlParcelFulfillmentProviderService extends AbstractFulfillmentProviderSer
     const response = await this.client.createLabel(input)
 
     // 12. Tracking number.
-    const trackingNumber = response.shipmentTrackerCode
+    const trackingNumber = response.trackerCode
 
     // 13. Tracking URL. The literal `+` between barcode and postcode is what
     //     DHL's consumer track-and-trace expects; do NOT url-encode it.
@@ -249,6 +249,10 @@ class DhlParcelFulfillmentProviderService extends AbstractFulfillmentProviderSer
         city: address.city ?? "",
         street,
         number,
+        // Inovix sells B2C, so receivers are consumers. DHL splits its label
+        // capabilities by toBusiness; omitting this makes POST /labels return
+        // "capabilities_retrieve_empty" (verified live against the prod gateway).
+        isBusiness: false,
       },
       email,
       phoneNumber: address.phone,
@@ -266,6 +270,7 @@ class DhlParcelFulfillmentProviderService extends AbstractFulfillmentProviderSer
         city: s.city,
         street,
         number,
+        isBusiness: true,
       },
       email: s.email || undefined,
       phoneNumber: s.phone || undefined,
