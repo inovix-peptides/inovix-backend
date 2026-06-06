@@ -129,3 +129,25 @@ export const WORKER_MODE =
  * Disable Admin
  */
 export const SHOULD_DISABLE_ADMIN = process.env.MEDUSA_DISABLE_ADMIN === 'true'
+
+/**
+ * DHL Parcel NL — shipping provider
+ *
+ * Credentials are issued per DHL eCommerce API account.
+ * DHL_PARCEL_API_BASE_URL defaults to the accept/sandbox environment;
+ * set to https://api-gw.dhlparcel.nl in production.
+ */
+export const DHL_PARCEL_USER_ID = process.env.DHL_PARCEL_USER_ID ?? ''
+export const DHL_PARCEL_KEY = process.env.DHL_PARCEL_KEY ?? ''
+export const DHL_PARCEL_API_BASE_URL =
+  process.env.DHL_PARCEL_API_BASE_URL ?? 'https://api-gw-accept.dhlparcel.nl'
+
+export const DHL_PARCEL_SHIPPER = {
+  name: process.env.DHL_PARCEL_SHIPPER_NAME ?? 'Inovix',
+  street: process.env.DHL_PARCEL_SHIPPER_STREET ?? '',
+  postalCode: process.env.DHL_PARCEL_SHIPPER_POSTAL_CODE ?? '',
+  city: process.env.DHL_PARCEL_SHIPPER_CITY ?? '',
+  countryCode: process.env.DHL_PARCEL_SHIPPER_COUNTRY_CODE ?? 'NL',
+  phone: process.env.DHL_PARCEL_SHIPPER_PHONE ?? '',
+  email: process.env.DHL_PARCEL_SHIPPER_EMAIL ?? '',
+} as const
