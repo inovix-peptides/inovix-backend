@@ -146,8 +146,9 @@ class DhlParcelFulfillmentProviderService extends AbstractFulfillmentProviderSer
     // 6. Receiver, mapped from the shipping address.
     const receiver = this.mapReceiver(shippingAddress, ord.email)
 
-    // 7. Shipper, from the configured constant.
-    const shipper = this.mapShipper()
+    // 7. Shipper: use the admin-saved warehouse address when the build-payload
+    //    step resolved it; fall back to the env constant otherwise.
+    const shipper = (data.dhl_shipper as DhlParcelContact) ?? this.mapShipper()
 
     // 8. Account id.
     const accountId = (await this.client.getAccountNumbers())[0]

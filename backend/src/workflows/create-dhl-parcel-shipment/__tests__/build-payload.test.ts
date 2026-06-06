@@ -29,9 +29,44 @@ const presets = [
   { id: "box_l", parcel_type_key: "SMALL_MEDIUM", max_items: 10, name: "Small-Medium", length_cm: 40, width_cm: 30, height_cm: 20 },
 ]
 
-function makeContainer(p = presets) {
+const SAMPLE_SETTINGS_ROW = {
+  id: "settings_1",
+  shipper_name: "Inovix Warehouse",
+  shipper_street: "Magazijnweg",
+  shipper_number: "5",
+  shipper_postal_code: "1234AB",
+  shipper_city: "Amsterdam",
+  shipper_country_code: "NL",
+  shipper_phone: "+31201234567",
+  shipper_email: "ship@inovix-peptides.nl",
+}
+
+/**
+ * Build a mock container that routes resolve() to the right service by module
+ * key. `settingsRows` controls what the settings module returns (defaults to
+ * SAMPLE_SETTINGS_ROW); pass `[]` to simulate no saved settings, or pass
+ * `"throw"` to simulate the module not being registered at all.
+ */
+function makeContainer(
+  p = presets,
+  settingsRows: any[] | "throw" = [SAMPLE_SETTINGS_ROW],
+) {
   const boxesService = { listDhlParcelBoxPresets: jest.fn(async () => p) }
-  return { resolve: jest.fn(() => boxesService) } as any
+  const settingsService =
+    settingsRows === "throw"
+      ? null
+      : { listDhlParcelSettings: jest.fn(async () => settingsRows) }
+
+  return {
+    resolve: jest.fn((key: string) => {
+      if (key === "dhl_parcel_boxes") return boxesService
+      if (key === "dhl_parcel_settings") {
+        if (!settingsService) throw new Error("Module dhl_parcel_settings not registered")
+        return settingsService
+      }
+      throw new Error(`Unknown module: ${key}`)
+    }),
+  } as any
 }
 
 function orderWith(methodData: Record<string, any>, items: any[]) {
@@ -129,5 +164,73 @@ describe("build-payload step (DHL Parcel)", () => {
     const result = await buildPayload({ order } as any, { container: makeContainer() } as any)
     expect(result.output.dhl_option).toBe("PS")
     expect(result.output.service_point_id).toBe("sp-999")
+  })
+
+  // ─── Settings / shipper tests ─────────────────────────────────────────────
+
+  it("sets dhl_shipper from the settings row when one exists", async () => {
+    const order = orderWith({ dhl_option: "DOOR" }, [
+      { quantity: 1, product: { id: "p1", weight: 100 } },
+    ])
+    const result = await buildPayload(
+      { order } as any,
+      { container: makeContainer(presets, [SAMPLE_SETTINGS_ROW]) } as any,
+    )
+
+    expect(result.output.dhl_shipper).toEqual({
+      name: { companyName: "Inovix Warehouse" },
+      address: {
+        countryCode: "NL",
+        postalCode: "1234AB",
+        city: "Amsterdam",
+        street: "Magazijnweg",
+        number: "5",
+        isBusiness: true,
+      },
+      email: "ship@inovix-peptides.nl",
+      phoneNumber: "+31201234567",
+    })
+  })
+
+  it("sets dhl_shipper.address.number to undefined when shipper_number is null in the row", async () => {
+    const rowWithoutNumber = { ...SAMPLE_SETTINGS_ROW, shipper_number: null }
+    const order = orderWith({ dhl_option: "DOOR" }, [
+      { quantity: 1, product: { id: "p1", weight: 100 } },
+    ])
+    const result = await buildPayload(
+      { order } as any,
+      { container: makeContainer(presets, [rowWithoutNumber]) } as any,
+    )
+
+    expect(result.output.dhl_shipper).toMatchObject({
+      name: { companyName: "Inovix Warehouse" },
+      address: { isBusiness: true },
+    })
+    expect(result.output.dhl_shipper.address.number).toBeUndefined()
+  })
+
+  it("leaves dhl_shipper undefined when the settings module returns an empty list (env fallback)", async () => {
+    const order = orderWith({ dhl_option: "DOOR" }, [
+      { quantity: 1, product: { id: "p1", weight: 100 } },
+    ])
+    const result = await buildPayload(
+      { order } as any,
+      { container: makeContainer(presets, []) } as any,
+    )
+
+    expect(result.output.dhl_shipper).toBeUndefined()
+  })
+
+  it("leaves dhl_shipper undefined when the settings module throws (graceful degradation)", async () => {
+    const order = orderWith({ dhl_option: "DOOR" }, [
+      { quantity: 1, product: { id: "p1", weight: 100 } },
+    ])
+    const result = await buildPayload(
+      { order } as any,
+      { container: makeContainer(presets, "throw") } as any,
+    )
+
+    // The step must not throw — it degrades gracefully to env fallback.
+    expect(result.output.dhl_shipper).toBeUndefined()
   })
 })

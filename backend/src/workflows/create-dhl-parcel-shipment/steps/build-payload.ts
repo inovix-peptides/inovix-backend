@@ -1,11 +1,16 @@
 import { createStep, StepResponse } from "@medusajs/framework/workflows-sdk"
 import { sumOrderWeightGrams, suggestBoxPreset } from "../../../modules/dhl-parcel/box-selector"
 import { findDhlParcelMethod } from "./validate-order"
+import type { DhlParcelContact } from "../../../modules/dhl-parcel/types"
 
 // Same literal as in validate-order: the dhl-parcel-boxes module registration
 // key. Used as a string so this step does not pull the MikroORM model into the
 // workflow's import graph.
 const DHL_PARCEL_BOXES_MODULE = "dhl_parcel_boxes"
+
+// String literal for the settings module — same pattern as above; avoids
+// pulling the MikroORM model into the workflow's import graph.
+const DHL_PARCEL_SETTINGS_MODULE = "dhl_parcel_settings"
 
 type BoxPreset = {
   id: string
@@ -61,6 +66,34 @@ const buildPayload = createStep(
     const presets: BoxPreset[] = await boxesService.listDhlParcelBoxPresets()
     const { preset } = suggestBoxPreset(presets, totalUnits)
 
+    // Resolve the admin-saved warehouse address (settings singleton). Degrades
+    // gracefully: if the module is missing or the list is empty we leave
+    // dhl_shipper undefined so the service falls back to the env constant.
+    let dhl_shipper: DhlParcelContact | undefined
+    try {
+      const settingsService = container.resolve(DHL_PARCEL_SETTINGS_MODULE)
+      const rows: any[] = await settingsService.listDhlParcelSettings({})
+      const row = rows[0]
+      if (row) {
+        dhl_shipper = {
+          name: { companyName: row.shipper_name },
+          address: {
+            countryCode: row.shipper_country_code,
+            postalCode: row.shipper_postal_code,
+            city: row.shipper_city,
+            street: row.shipper_street,
+            number: row.shipper_number ?? undefined,
+            isBusiness: true,
+          },
+          email: row.shipper_email || undefined,
+          phoneNumber: row.shipper_phone || undefined,
+        }
+      }
+    } catch {
+      // Module not registered in this context (e.g. isolated test) — fall back
+      // to the env shipper in the service.
+    }
+
     // Use the shared finder so we pick the DHL Parcel method specifically, not
     // just shipping_methods[0] which may be a fee/discount method.
     const method = findDhlParcelMethod(order.shipping_methods ?? [])
@@ -87,6 +120,7 @@ const buildPayload = createStep(
       dhl_total_weight_grams: dhlTotalWeightGrams,
       total_units: totalUnits,
       items: enrichedItems,
+      dhl_shipper,
     })
   },
 )

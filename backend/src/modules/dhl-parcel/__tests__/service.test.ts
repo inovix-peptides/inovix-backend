@@ -294,4 +294,50 @@ describe("DhlParcelFulfillmentProviderService", () => {
       expect.stringContaining("label-xyz"),
     )
   })
+
+  // ─── Test 8: createFulfillment uses dhl_shipper from data when present ───────
+  it("createFulfillment uses data.dhl_shipper when provided (admin-saved warehouse address)", async () => {
+    const client = makeMockClient()
+    client.createLabel.mockResolvedValue(SAMPLE_LABEL_RESPONSE)
+    const { svc } = await makeService(client)
+
+    const adminShipper = {
+      name: { companyName: "Inovix Warehouse" },
+      address: {
+        countryCode: "NL",
+        postalCode: "1234AB",
+        city: "Amsterdam",
+        street: "Magazijnweg",
+        number: "5",
+        isBusiness: true,
+      },
+      email: "ship@inovix-peptides.nl",
+      phoneNumber: "+31201234567",
+    }
+
+    const dataWithShipper = { ...BASE_DATA, dhl_shipper: adminShipper }
+    await svc.createFulfillment(dataWithShipper, SAMPLE_ITEMS, sampleOrder(), {})
+
+    const input = client.createLabel.mock.calls[0][0]
+    // Must use the admin shipper, NOT the env constant.
+    expect(input.shipper).toEqual(adminShipper)
+  })
+
+  // ─── Test 9: createFulfillment falls back to env shipper when dhl_shipper absent ─
+  it("createFulfillment falls back to the env shipper (mapShipper) when data.dhl_shipper is absent", async () => {
+    const client = makeMockClient()
+    client.createLabel.mockResolvedValue(SAMPLE_LABEL_RESPONSE)
+    const { svc } = await makeService(client)
+
+    // BASE_DATA has no dhl_shipper field.
+    await svc.createFulfillment(BASE_DATA, SAMPLE_ITEMS, sampleOrder(), {})
+
+    const input = client.createLabel.mock.calls[0][0]
+    // The env constant is mocked above: name "Inovix", street "Shipperstraat 10", etc.
+    // mapShipper() splits "Shipperstraat 10" into street + number.
+    expect(input.shipper.name).toEqual({ companyName: "Inovix" })
+    expect(input.shipper.address.countryCode).toBe("NL")
+    expect(input.shipper.address.city).toBe("Utrecht")
+    expect(input.shipper.address.isBusiness).toBe(true)
+  })
 })
