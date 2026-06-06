@@ -1,0 +1,122 @@
+import type { MedusaRequest, MedusaResponse } from "@medusajs/framework"
+import { ContainerRegistrationKeys, MedusaError } from "@medusajs/framework/utils"
+import type { Logger } from "@medusajs/framework/types"
+import { createDhlParcelShipmentWorkflow } from "../../../../../workflows/create-dhl-parcel-shipment"
+
+// Fields loaded via query.graph to give the workflow everything it reads.
+// - items.variant.product.weight: the REAL product-weight path in Medusa v2
+//   (confirmed from node_modules/@medusajs/medusa/dist/api/admin/orders/query-config.js
+//   which uses "*items.variant" + "*items.variant.product").
+//   After loading, each item is reshaped so item.product = item.variant?.product,
+//   matching the shape the workflow's validate-order / build-payload / service steps
+//   all expect at item.product.weight.
+// - shipping_methods.shipping_option.*: needed by findDhlParcelMethod to read
+//   shipping_option.provider_id and shipping_option.data.dhl_option.
+const ORDER_FIELDS = [
+  "id",
+  "display_id",
+  "status",
+  "email",
+  "*shipping_address",
+  "*items",
+  "*items.variant",
+  "*items.variant.product",
+  "*shipping_methods",
+  "shipping_methods.shipping_option_id",
+  "*shipping_methods.shipping_option",
+]
+
+export async function POST(
+  req: MedusaRequest,
+  res: MedusaResponse
+): Promise<void> {
+  const orderId = req.params.id
+  const logger = req.scope.resolve("logger") as Logger
+  const query = req.scope.resolve(ContainerRegistrationKeys.QUERY)
+
+  // 1. Load the order fully.
+  const { data: orders } = await query.graph({
+    entity: "order",
+    filters: { id: orderId },
+    fields: ORDER_FIELDS,
+  })
+
+  const raw = orders?.[0]
+  if (!raw) {
+    res.status(404).json({ message: `Order ${orderId} not found` })
+    return
+  }
+
+  // 2. Reshape items: expose item.product = item.variant?.product so the
+  //    workflow (validate-order / build-payload / service) reads
+  //    item.product.weight as expected. The natural Medusa v2 graph path is
+  //    items[i].variant.product but the workflow contract is items[i].product.
+  const reshapedItems = ((raw.items ?? []) as any[]).map((item: any) => ({
+    ...item,
+    product: item.variant?.product ?? item.product ?? null,
+  }))
+
+  const order = {
+    ...raw,
+    items: reshapedItems,
+  }
+
+  // 3. Run the workflow.
+  try {
+    const { result } = await createDhlParcelShipmentWorkflow(req.scope).run({
+      input: { order },
+    })
+
+    // 4. Map the response. Prefer fulfillment.data.* fields (written by
+    //    DhlParcelFulfillmentProviderService.createFulfillment). Fall back to
+    //    fulfillment.labels[0] in case data is not fully populated on the
+    //    returned object (flagged for Task 22 live verification).
+    const fulfillment: any = result.fulfillment
+    const data: any = fulfillment?.data ?? {}
+    const label0: any = fulfillment?.labels?.[0] ?? {}
+
+    const tracking_number: string | null =
+      data.dhl_tracking_number ?? label0.tracking_number ?? null
+    const label_pdf_url: string | null =
+      data.dhl_label_pdf_url ?? label0.label_url ?? null
+    const shipment_tracking_url: string | null =
+      data.dhl_shipment_tracking_url ?? label0.tracking_url ?? null
+
+    logger.info(
+      `admin.dhl-label: created fulfillment ${result.fulfillment_id} for order ${orderId} | tracking=${tracking_number}`
+    )
+
+    res.status(201).json({
+      fulfillment_id: result.fulfillment_id,
+      tracking_number,
+      label_pdf_url,
+      shipment_tracking_url,
+    })
+  } catch (err: any) {
+    // Distinguish workflow validation failures (MedusaError) from unexpected errors.
+    // NOTE: use isMedusaError (not instanceof): the workflow engine serializes step
+    // errors to plain objects before re-throwing, so instanceof fails but the
+    // __isMedusaError marker (checked by isMedusaError) survives.
+    if (MedusaError.isMedusaError(err)) {
+      const status =
+        err.type === MedusaError.Types.NOT_FOUND ? 404
+        : err.type === MedusaError.Types.NOT_ALLOWED ? 400
+        : err.type === MedusaError.Types.INVALID_DATA ? 400
+        : 500
+
+      logger.warn(
+        `admin.dhl-label: workflow validation failed for order ${orderId}: [${err.type}] ${err.message}`
+      )
+      res.status(status).json({ message: err.message, details: err.type })
+      return
+    }
+
+    logger.error(
+      `admin.dhl-label: unexpected error for order ${orderId}: ${(err as Error).message}`
+    )
+    res.status(500).json({
+      message: "DHL label creation failed",
+      details: (err as Error).message,
+    })
+  }
+}
