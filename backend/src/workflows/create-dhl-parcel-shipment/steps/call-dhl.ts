@@ -37,7 +37,12 @@ const callDhl = createStep(
     // call-dhl step.
     const fulfillment = await fulfillmentService.createFulfillment({
       location_id: stockLocations[0].id,
-      provider_id: "dhl-parcel",
+      // Medusa registers fulfillment providers under the COMPOSED id
+      // `<config-id>_<service-identifier>` (both are "dhl-parcel" here), i.e.
+      // "dhl-parcel_dhl-parcel" (verified in the fulfillment_provider table; the
+      // seeded shipping options use the same value). Passing the bare "dhl-parcel"
+      // fails provider resolution at the module boundary. Do NOT shorten this.
+      provider_id: "dhl-parcel_dhl-parcel",
       delivery_address: input.delivery_address ?? {},
       items,
       labels: [],

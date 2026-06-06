@@ -58,7 +58,7 @@ const payload = {
 describe("call-dhl step (DHL Parcel)", () => {
   const deliveryAddress = { country_code: "nl", postal_code: "3000AA" }
 
-  it("invokes createFulfillment with provider_id dhl-parcel, the location, order, and the enriched items", async () => {
+  it("invokes createFulfillment with provider_id dhl-parcel_dhl-parcel, the location, order, and the enriched items", async () => {
     const created = { id: "ful_1", data: { dhl_tracking_number: "JVGL123NL" } }
     const { container, __fulfillmentService } = makeContainer(created)
 
@@ -71,7 +71,7 @@ describe("call-dhl step (DHL Parcel)", () => {
     expect(container.resolve).toHaveBeenCalledWith("fulfillment")
     expect(__fulfillmentService.createFulfillment).toHaveBeenCalledTimes(1)
     const arg = __fulfillmentService.createFulfillment.mock.calls[0][0]
-    expect(arg.provider_id).toBe("dhl-parcel")
+    expect(arg.provider_id).toBe("dhl-parcel_dhl-parcel")
     expect(arg.location_id).toBe("loc_1")
     expect(arg.order).toEqual({ id: "order_1" })
     expect(arg.items).toEqual(payload.items)
