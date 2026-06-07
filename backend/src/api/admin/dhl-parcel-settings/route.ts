@@ -86,10 +86,13 @@ export const PUT = async (req: MedusaRequest, res: MedusaResponse) => {
 
   let saved: SettingsRow
   if (existing.length > 0) {
-    saved = await service.updateDhlParcelSettings(
-      { id: existing[0].id },
-      payload,
-    )
+    // Medusa's generated update takes a SINGLE object with the id merged in
+    // (update(data, sharedContext)); a separate (selector, data) call silently
+    // updates nothing because the 2nd arg is treated as the shared context.
+    saved = await service.updateDhlParcelSettings({
+      id: existing[0].id,
+      ...payload,
+    })
   } else {
     saved = await service.createDhlParcelSettings(payload)
   }

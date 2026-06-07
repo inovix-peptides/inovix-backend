@@ -7,17 +7,20 @@ import { normalizeThreshold } from "../lib/free-shipping-threshold"
  * One-off / repeatable apply of the free-shipping threshold against an
  * environment where the admin PUT cannot be reached (e.g. initial prod setup).
  *
- *   medusa exec ./src/scripts/apply-free-shipping.ts 75     # free over EUR 75
- *   medusa exec ./src/scripts/apply-free-shipping.ts off    # disable
+ *   FREE_SHIPPING_THRESHOLD=75  medusa exec ./src/scripts/apply-free-shipping.ts
+ *   FREE_SHIPPING_THRESHOLD=off medusa exec ./src/scripts/apply-free-shipping.ts
  *
- * Persists the threshold on the dhl_parcel_settings singleton (so the admin UI
- * and storefront read it) and syncs the conditional EUR 0 price on the DHL
- * options. Defaults to 75 when no arg is given.
+ * The value is read from FREE_SHIPPING_THRESHOLD (preferred, always a string) or
+ * the first CLI arg. Persists the threshold on the dhl_parcel_settings singleton
+ * (so the admin UI and storefront read it) and syncs the conditional EUR 0 price
+ * on the DHL options. Defaults to 75 when nothing is given.
  */
 export default async function applyFreeShipping({ container, args }: ExecArgs) {
   const logger = container.resolve("logger")
 
-  const rawArg = (args?.[0] ?? "75").trim()
+  const rawArg = String(
+    process.env.FREE_SHIPPING_THRESHOLD ?? args?.[0] ?? "75",
+  ).trim()
   const threshold = rawArg.toLowerCase() === "off" ? null : normalizeThreshold(rawArg)
 
   if (rawArg.toLowerCase() !== "off" && threshold == null) {
@@ -34,10 +37,11 @@ export default async function applyFreeShipping({ container, args }: ExecArgs) {
   const thresholdText = threshold != null ? String(threshold) : null
 
   if (rows.length > 0) {
-    await service.updateDhlParcelSettings(
-      { id: rows[0].id },
-      { free_shipping_threshold: thresholdText },
-    )
+    // update(data, sharedContext): id must be IN the data object, not a 2nd arg.
+    await service.updateDhlParcelSettings({
+      id: rows[0].id,
+      free_shipping_threshold: thresholdText,
+    })
     logger.info(`Updated dhl_parcel_settings.free_shipping_threshold = ${thresholdText}`)
   } else {
     await service.createDhlParcelSettings({
