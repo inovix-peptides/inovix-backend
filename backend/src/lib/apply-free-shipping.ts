@@ -91,9 +91,9 @@ export async function applyFreeShippingToDhlOptions(
         rebuilt.push({
           ...base,
           amount: 0,
-          rules: [
-            { attribute: ITEM_TOTAL, operator: "gte", value: String(threshold) },
-          ],
+          // The pricing module requires operator-rule values to be NUMBERS
+          // (it throws "value should be a number" for strings).
+          rules: [{ attribute: ITEM_TOTAL, operator: "gte", value: threshold }],
         })
       }
     }
