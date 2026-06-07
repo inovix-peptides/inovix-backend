@@ -31,6 +31,35 @@ describe('sumOrderWeightGrams', () => {
       sumOrderWeightGrams([{ quantity: 1, product: undefined }])
     ).toThrow('Cannot compute shipment weight: an order item is missing a product weight')
   })
+
+  // Medusa stores product.weight as TEXT, so the real query.graph value is a
+  // string. These guard the prod data shape (numeric literals alone hid the bug).
+  it('accepts a string weight (the shape Medusa actually returns)', () => {
+    expect(
+      sumOrderWeightGrams([{ quantity: 2, product: { weight: '50' } }])
+    ).toBe(100)
+  })
+
+  it('sums mixed string and number weights', () => {
+    expect(
+      sumOrderWeightGrams([
+        { quantity: 1, product: { weight: '50' } },
+        { quantity: 2, product: { weight: 10 } },
+      ])
+    ).toBe(70)
+  })
+
+  it('throws on a blank string weight', () => {
+    expect(() =>
+      sumOrderWeightGrams([{ quantity: 1, product: { weight: '  ' } }])
+    ).toThrow('Cannot compute shipment weight: an order item is missing a product weight')
+  })
+
+  it('throws on a non-numeric string weight', () => {
+    expect(() =>
+      sumOrderWeightGrams([{ quantity: 1, product: { weight: 'abc' } }])
+    ).toThrow('Cannot compute shipment weight: an order item is missing a product weight')
+  })
 })
 
 describe('suggestBoxPreset', () => {

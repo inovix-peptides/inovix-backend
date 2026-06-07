@@ -6,16 +6,23 @@
 /**
  * Sums the total order weight in grams across all line items.
  *
+ * Medusa stores `product.weight` in a TEXT column (model.text()), so query.graph
+ * returns it as a STRING ("50"), not a number. (Variant weight is numeric.) We
+ * coerce here so both the string (real product weight) and number (variant /
+ * test data) shapes work. A blank or non-numeric string is treated as missing.
+ *
  * @throws Error if any item is missing a usable product weight.
  */
 export function sumOrderWeightGrams(
-  items: Array<{ quantity: number; product?: { weight?: number | null } }>
+  items: Array<{ quantity: number; product?: { weight?: number | string | null } }>
 ): number {
   if (items.length === 0) return 0
 
   let total = 0
   for (const item of items) {
-    const w = item.product?.weight
+    const raw = item.product?.weight
+    const w =
+      typeof raw === 'string' ? (raw.trim() === '' ? NaN : Number(raw)) : raw
     if (w == null || !Number.isFinite(w)) {
       throw new Error(
         'Cannot compute shipment weight: an order item is missing a product weight'

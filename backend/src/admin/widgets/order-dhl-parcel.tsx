@@ -36,12 +36,25 @@ type DhlFulfillment = {
   labels?: FulfillmentLabel[]
 }
 
+// A line item, only the bits we need to verify the product is shippable.
+// item.variant.product.weight is the real Medusa v2 product-weight path and is
+// loaded by default on the admin order detail (defaultAdminRetrieveOrderFields
+// includes *items.variant.product), so requesting it here is safe.
+type DhlLineItem = {
+  id: string
+  title?: string | null
+  variant?: {
+    product?: { weight?: number | null; title?: string | null } | null
+  } | null
+}
+
 // The fetched order shape: starts from AdminOrder (which carries .id) and adds
 // the extra fields we request via ?fields= on the fetch.
 type FetchedOrder = {
   id: string
   shipping_methods?: DhlShippingMethod[]
   fulfillments?: DhlFulfillment[]
+  items?: DhlLineItem[]
 }
 
 // ─── Field selection for the widget's own order fetch ────────────────────────
@@ -63,6 +76,12 @@ const ORDER_FIELDS = [
   "fulfillments.labels.tracking_number",
   "fulfillments.labels.tracking_url",
   "fulfillments.labels.label_url",
+  // Product weight per line item: a DHL label cannot be made without it, so we
+  // pre-check here and tell the operator before they hit a failed POST.
+  "items.id",
+  "items.title",
+  "items.variant.product.weight",
+  "items.variant.product.title",
 ].join(",")
 
 // ─── Helpers ─────────────────────────────────────────────────────────────────
@@ -115,6 +134,22 @@ function getLabelPdfUrl(fulfillment: DhlFulfillment): string | null {
   }
   // Fall back to labels[0].label_url
   return fulfillment.labels?.[0]?.label_url ?? null
+}
+
+// Names of products on the order that have no weight. DHL cannot create a label
+// without a product weight, so the label flow fails server-side on these. We
+// surface them here (matching validate-order's `weight == null` rule) so the
+// operator fixes the product first instead of clicking into a failure.
+function productsMissingWeight(order: FetchedOrder): string[] {
+  const names = new Set<string>()
+  for (const item of order.items ?? []) {
+    if (item.variant?.product?.weight == null) {
+      names.add(
+        item.title || item.variant?.product?.title || "Onbekend product"
+      )
+    }
+  }
+  return [...names]
 }
 
 // ─── Sub-components ───────────────────────────────────────────────────────────
@@ -170,9 +205,9 @@ function CreateLabelPrompt({
         <Prompt.Header>
           <Prompt.Title>DHL-label aanmaken</Prompt.Title>
           <Prompt.Description>
-            Hiermee maak je een echt DHL-label aan. In LIVE-modus belast DHL je
-            account voor de verzendkosten; in testmodus is het label gratis en
-            wordt het niet daadwerkelijk verzonden. Doorgaan?
+            Hiermee maak je het DHL-verzendlabel aan voor deze bestelling. De
+            verzendkosten worden op je DHL-account in rekening gebracht.
+            Controleer eerst het bezorgadres en de bezorgwijze. Doorgaan?
           </Prompt.Description>
         </Prompt.Header>
         <Prompt.Footer>
@@ -440,6 +475,12 @@ const OrderDhlParcelWidget = ({ data }: DetailWidgetProps<AdminOrder>) => {
 
   // ── State 2: DHL method present but NO label yet ──────────────────────────
 
+  // Pre-flight: a label cannot be created while any product lacks a weight.
+  // Block the button and explain, instead of letting the operator click into a
+  // server-side failure.
+  const missingWeight = productsMissingWeight(order)
+  const blocked = missingWeight.length > 0
+
   return (
     <>
       <Container className="divide-y p-0">
@@ -478,14 +519,37 @@ const OrderDhlParcelWidget = ({ data }: DetailWidgetProps<AdminOrder>) => {
             </div>
           )}
 
-          <Text size="small" className="text-ui-fg-muted">
-            Nog geen DHL-label aangemaakt voor deze bestelling.
-          </Text>
+          {blocked ? (
+            <div
+              style={{
+                border: "1px solid #fcd34d",
+                background: "#fffbeb",
+                padding: "12px 14px",
+              }}
+            >
+              <Text size="small" weight="plus" style={{ color: "#92400e" }}>
+                {missingWeight.length === 1
+                  ? "Dit product heeft nog geen gewicht"
+                  : "Deze producten hebben nog geen gewicht"}
+              </Text>
+              <Text size="small" style={{ color: "#78350f", marginTop: "4px" }}>
+                Zonder gewicht kan DHL geen label aanmaken. Stel eerst het
+                gewicht (in gram) in op{" "}
+                {missingWeight.map((n) => `"${n}"`).join(", ")} en kom dan hier
+                terug om het label aan te maken.
+              </Text>
+            </div>
+          ) : (
+            <Text size="small" className="text-ui-fg-muted">
+              Nog geen DHL-label aangemaakt voor deze bestelling.
+            </Text>
+          )}
         </div>
         <div className="flex items-center justify-end px-6 py-4">
           <Button
             variant="primary"
             size="small"
+            disabled={blocked}
             onClick={() => setCreateOpen(true)}
           >
             Maak DHL-label

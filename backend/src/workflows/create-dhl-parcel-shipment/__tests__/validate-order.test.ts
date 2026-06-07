@@ -119,7 +119,7 @@ describe("validate-order step (DHL Parcel)", () => {
         { order } as any,
         { container: makeContainer(presets) } as any,
       ),
-    ).rejects.toThrow(/weight/i)
+    ).rejects.toThrow(/gewicht/i)
   })
 
   it("throws when no box presets are configured", async () => {

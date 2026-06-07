@@ -76,7 +76,7 @@ const validateOrder = createStep(
       if (item.product?.weight == null) {
         throw new MedusaError(
           MedusaError.Types.INVALID_DATA,
-          `Product "${item.product?.title ?? "?"}" is missing weight`,
+          `Product "${item.product?.title ?? "?"}" heeft nog geen gewicht. Stel een gewicht (in gram) in op dit product en probeer het opnieuw.`,
         )
       }
     }
