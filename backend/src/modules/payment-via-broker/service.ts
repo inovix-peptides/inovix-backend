@@ -43,6 +43,11 @@ type SessionData = {
   status?: BrokerStatus
   amountMinor?: number
   currency?: string
+  // Medusa cart id, carried through so the post-payment return can recover the
+  // cart from the broker `ref` even when the customer comes back in a different
+  // browser context (e.g. the iDEAL app) and client storage is gone. Never sent
+  // to Mollie | it only lives on the Inovix-side payment session.
+  cart_id?: string
 }
 
 const ZERO_DECIMAL_CURRENCIES = new Set([
@@ -110,6 +115,7 @@ class PaymentViaBrokerProviderService extends AbstractPaymentProvider<BrokerOpti
   ): Promise<InitiatePaymentOutput> {
     const amountMinor = this.toMinorUnit(input.amount, input.currency_code)
     const ref = `pay_${randomToken()}`
+    const cartId = (input.data as { cart_id?: string } | undefined)?.cart_id
     const storefrontUrl = process.env.STOREFRONT_URL
     const inovixReturn = storefrontUrl
       ? `${storefrontUrl.replace(/\/$/, "")}/checkout/return?ref=${ref}`
@@ -142,6 +148,7 @@ class PaymentViaBrokerProviderService extends AbstractPaymentProvider<BrokerOpti
       status: created.status,
       amountMinor,
       currency: input.currency_code,
+      cart_id: cartId,
     }
     return {
       id: created.ref,
@@ -167,10 +174,12 @@ class PaymentViaBrokerProviderService extends AbstractPaymentProvider<BrokerOpti
     }
     // Amount changed: just initiate a fresh broker payment. The previous
     // ref will be left dangling; the broker's Mollie payment for it expires.
+    // Carry the cart_id forward so the new session keeps it for return recovery.
     const reinit = await this.initiatePayment({
       amount: input.amount,
       currency_code: input.currency_code,
       context: input.context,
+      data: incoming.cart_id ? { cart_id: incoming.cart_id } : undefined,
     } as InitiatePaymentInput)
     return { data: reinit.data }
   }

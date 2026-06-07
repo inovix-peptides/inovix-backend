@@ -79,4 +79,33 @@ describe("PaymentViaBrokerProviderService.initiatePayment", () => {
       (result.data as { checkoutUrl: string }).checkoutUrl
     ).toContain("mollie.com")
   })
+
+  test("carries cart_id from input.data onto the session for return recovery", async () => {
+    global.fetch = jest.fn(async (url) => {
+      if (String(url).includes("api.cloudflare.com")) {
+        return new Response(JSON.stringify({ success: true }), { status: 200 })
+      }
+      return new Response(
+        JSON.stringify({
+          ref: "pay_abc",
+          checkout_url: "https://www.mollie.com/checkout/x",
+          status: "pending",
+        }),
+        { status: 200 }
+      )
+    }) as typeof fetch
+
+    const svc = new PaymentViaBrokerProviderService(
+      { logger: fakeLogger } as never,
+      baseOptions
+    )
+    const result = await svc.initiatePayment({
+      amount: 10.95 as never,
+      currency_code: "EUR",
+      context: {},
+      data: { cart_id: "cart_test_123" },
+    } as never)
+
+    expect((result.data as { cart_id?: string }).cart_id).toBe("cart_test_123")
+  })
 })
