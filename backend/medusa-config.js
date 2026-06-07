@@ -14,8 +14,6 @@ import {
   SENDGRID_FROM_EMAIL,
   SHOULD_DISABLE_ADMIN,
   STORE_CORS,
-  STRIPE_API_KEY,
-  STRIPE_WEBHOOK_SECRET,
   BROKER_URL,
   BROKER_CLIENT_ID,
   BROKER_HMAC_SECRET,
@@ -135,21 +133,12 @@ const medusaConfig = {
       }
     }] : []),
     ...(
-      (STRIPE_API_KEY && STRIPE_WEBHOOK_SECRET) ||
       (BROKER_URL && BROKER_CLIENT_ID && BROKER_HMAC_SECRET)
         ? [{
             key: Modules.PAYMENT,
             resolve: '@medusajs/payment',
             options: {
               providers: [
-                ...(STRIPE_API_KEY && STRIPE_WEBHOOK_SECRET ? [{
-                  resolve: '@medusajs/payment-stripe',
-                  id: 'stripe',
-                  options: {
-                    apiKey: STRIPE_API_KEY,
-                    webhookSecret: STRIPE_WEBHOOK_SECRET,
-                  },
-                }] : []),
                 ...(BROKER_URL && BROKER_CLIENT_ID && BROKER_HMAC_SECRET
                   && CF_KV_ACCOUNT_ID && CF_KV_NAMESPACE_ID && CF_KV_API_TOKEN ? [{
                   resolve: './src/modules/payment-via-broker',

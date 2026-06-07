@@ -88,12 +88,6 @@ export const SENDGRID_API_KEY = process.env.SENDGRID_API_KEY;
 export const SENDGRID_FROM_EMAIL = process.env.SENDGRID_FROM_EMAIL || process.env.SENDGRID_FROM;
 
 /**
- * (optional) Stripe API key and webhook secret
- */
-export const STRIPE_API_KEY = process.env.STRIPE_API_KEY;
-export const STRIPE_WEBHOOK_SECRET = process.env.STRIPE_WEBHOOK_SECRET;
-
-/**
  * (optional) Payments routed through an external broker (tenant of an MoR
  * payments aggregator). Code references the broker generically; the env
  * value names the operator-visible URL.

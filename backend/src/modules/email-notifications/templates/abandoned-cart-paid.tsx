@@ -104,13 +104,13 @@ export const AbandonedCartPaidTemplate: React.FC<AbandonedCartPaidProps> & {
           Actie
         </Text>
         <Text className="text-black text-[13px] leading-[20px] m-0">
-          1. Verifieer de betaling in het MultiSafepay dashboard.
+          1. Verifieer de betaling in het betaaldashboard van de betaalprovider.
         </Text>
         <Text className="text-black text-[13px] leading-[20px] m-0">
           2. Neem contact op met de klant via het bovenstaande email adres.
         </Text>
         <Text className="text-black text-[13px] leading-[20px] m-0">
-          3. Maak de order handmatig aan in Medusa admin, of refund via MultiSafepay.
+          3. Maak de order handmatig aan in Medusa admin, of zet een refund klaar via de betaalprovider.
         </Text>
       </Section>
     </Base>
