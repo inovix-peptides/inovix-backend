@@ -99,7 +99,7 @@ export default async function reconcileBrokerPayments(
     Date.now()
   )
   if (candidates.length === 0) {
-    logger.info("[reconcile-broker-payments] no recent broker carts to check")
+    // Idle (no recent broker checkouts): stay silent.
     return
   }
 
@@ -171,13 +171,17 @@ export default async function reconcileBrokerPayments(
     }
   }
 
+  // One summary line per tick, only when there was actually work to do
+  // (open.length > 0 here | the idle and all-completed cases returned early).
+  // Doubles as the heartbeat that confirms the safety net is alive.
+  logger.info(
+    `[reconcile-broker-payments] checked ${open.length} open broker cart(s), recovered ${reconciled}`
+  )
   if (reconciled > 0) {
-    const msg = `[reconcile-broker-payments] recovered ${reconciled} paid order(s) the browser return did not finalise`
-    logger.warn(msg)
-    Sentry.captureMessage(msg, {
-      level: "info",
-      tags: { job: "reconcile-broker-payments" },
-    })
+    Sentry.captureMessage(
+      `[reconcile-broker-payments] recovered ${reconciled} paid order(s) the browser return did not finalise`,
+      { level: "info", tags: { job: "reconcile-broker-payments" } }
+    )
   }
 }
 
