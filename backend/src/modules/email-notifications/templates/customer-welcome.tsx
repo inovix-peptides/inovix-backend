@@ -96,7 +96,7 @@ export const CustomerWelcomeTemplate: React.FC<CustomerWelcomeTemplateProps> & {
 CustomerWelcomeTemplate.PreviewProps = {
   firstName: 'Jan',
   email: 'jan@example.com',
-  storefrontUrl: 'https://inovix-peptides.com',
+  storefrontUrl: 'https://inovix-peptides.nl',
 }
 
 export default CustomerWelcomeTemplate

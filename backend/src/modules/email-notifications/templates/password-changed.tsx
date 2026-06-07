@@ -70,7 +70,7 @@ export const PasswordChangedEmail: React.FC<PasswordChangedEmailProps> & {
 PasswordChangedEmail.PreviewProps = {
   actorType: 'customer',
   changedAt: '17 april 2026 om 14:32',
-  supportEmail: 'support@inovix-peptides.com',
+  supportEmail: 'support@inovix-peptides.nl',
 } as PasswordChangedEmailProps
 
 export default PasswordChangedEmail

@@ -30,7 +30,7 @@ function formatAmount(amount: number | null | undefined, currency: string): stri
 }
 
 function storefrontRetryUrl(cartId?: string | null): string {
-  const base = (process.env.STOREFRONT_URL ?? 'https://inovix-peptides.com').replace(/\/$/, '')
+  const base = (process.env.STOREFRONT_URL ?? 'https://inovix-peptides.nl').replace(/\/$/, '')
   return cartId ? `${base}/winkelwagen?cart_id=${encodeURIComponent(cartId)}` : `${base}/winkelwagen`
 }
 

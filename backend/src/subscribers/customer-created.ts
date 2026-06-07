@@ -9,7 +9,7 @@ import { EmailTemplates } from '../modules/email-notifications/templates'
 import { Sentry } from '../lib/instrument'
 
 const STOREFRONT_URL =
-  process.env.STOREFRONT_URL?.replace(/\/$/, '') ?? 'https://inovix-peptides.com'
+  process.env.STOREFRONT_URL?.replace(/\/$/, '') ?? 'https://inovix-peptides.nl'
 
 export default async function customerCreatedHandler({
   event: { data },

@@ -79,7 +79,7 @@ PaymentFailedTemplate.PreviewProps = {
   customerName: 'Jan de Vries',
   amountFormatted: '150,00',
   currency: 'EUR',
-  retryUrl: 'https://inovix-peptides.com/winkelwagen',
+  retryUrl: 'https://inovix-peptides.nl/winkelwagen',
 } as PaymentFailedProps
 
 export default PaymentFailedTemplate
