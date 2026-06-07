@@ -46,13 +46,17 @@ type FetchedOrder = {
 
 // ─── Field selection for the widget's own order fetch ────────────────────────
 
+// NOTE: do NOT request `shipping_methods.shipping_option.*` here. That
+// cross-module expansion (order_shipping_method -> fulfillment shipping_option)
+// is not resolvable on the admin order GET and makes it 500 ("Cannot read
+// properties of undefined (reading 'strategy')"), which surfaced as the widget
+// failing to load. The DHL method is identified from shipping_methods.data
+// (dhl_option) instead, which is all the widget needs.
 const ORDER_FIELDS = [
   "id",
   "shipping_methods.id",
   "shipping_methods.data",
   "shipping_methods.shipping_option_id",
-  "shipping_methods.shipping_option.provider_id",
-  "shipping_methods.shipping_option.data",
   "fulfillments.id",
   "fulfillments.provider_id",
   "fulfillments.data",

@@ -124,19 +124,31 @@ class DhlParcelFulfillmentProviderService extends AbstractFulfillmentProviderSer
     const labelId: string =
       data.dhl_label_id ?? uuidv5(`${ord.display_id}-1`, DHL_LABEL_NAMESPACE)
 
-    // 3. Total weight in grams (workflow enriches items with product.weight).
-    const weight = sumOrderWeightGrams(
-      items as Array<{ quantity: number; product?: { weight?: number | null } }>,
-    )
-
-    // 4. Parcel type (box selection step must have run first).
+    // 3. Parcel type. The build-payload step sets this from the chosen box
+    //    preset. It is absent when an operator uses Medusa's native "Create
+    //    Fulfillment" button instead of the DHL label flow, so fail early with
+    //    a clear instruction (checked BEFORE weight so that path doesn't surface
+    //    the confusing weight error first).
     const parcelTypeKey = data.dhl_parcel_type_key as DhlParcelParcelType | undefined
     if (!parcelTypeKey) {
       throw new MedusaError(
         MedusaError.Types.INVALID_DATA,
-        "Geen DHL pakkettype gekozen: de doos-selectie moet eerst draaien (dhl_parcel_type_key ontbreekt).",
+        'Maak het DHL-label via de knop "Maak DHL-label" op de bestelling (niet via de standaard Fulfill-knop): de doos- en gewichtsberekening moet eerst draaien.',
       )
     }
+
+    // 4. Total weight in grams. Prefer the value build-payload already computed
+    //    from product weights (carried on `data`); Medusa's fulfillment `items`
+    //    do NOT carry product.weight, so recomputing from them would wrongly
+    //    fail. Fall back to recomputation only when the pre-computed value is
+    //    absent (e.g. a direct provider call outside the workflow).
+    const precomputedWeight = data.dhl_total_weight_grams
+    const weight =
+      typeof precomputedWeight === "number" && precomputedWeight > 0
+        ? precomputedWeight
+        : sumOrderWeightGrams(
+            items as Array<{ quantity: number; product?: { weight?: number | null } }>,
+          )
 
     // 5. Dimensions.
     const dimensions = data.dhl_box_dimensions as
