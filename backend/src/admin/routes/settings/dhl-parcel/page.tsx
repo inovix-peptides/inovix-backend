@@ -26,6 +26,7 @@ type DhlParcelSettings = {
   shipper_country_code: string
   shipper_phone: string
   shipper_email: string
+  free_shipping_threshold?: string | null
 }
 
 type GetSettingsResponse = {
@@ -59,6 +60,7 @@ type FormValues = {
   shipper_country_code: string
   shipper_phone: string
   shipper_email: string
+  free_shipping_threshold: string
 }
 
 type FormErrors = Partial<Record<keyof FormValues, string>>
@@ -96,6 +98,14 @@ function validateForm(values: FormValues): FormErrors {
   } else if (!EMAIL_RE.test(values.shipper_email.trim())) {
     errors.shipper_email = "Voer een geldig e-mailadres in"
   }
+  // Free-shipping threshold is optional. Empty = uit. Otherwise a non-negative number.
+  if (values.free_shipping_threshold.trim() !== "") {
+    const n = Number(values.free_shipping_threshold.trim().replace(",", "."))
+    if (!Number.isFinite(n) || n < 0) {
+      errors.free_shipping_threshold =
+        "Voer een geldig bedrag in (bijv. 75), of laat leeg om gratis verzending uit te zetten"
+    }
+  }
 
   return errors
 }
@@ -110,6 +120,7 @@ function settingsToForm(s: DhlParcelSettings): FormValues {
     shipper_country_code: s.shipper_country_code ?? "NL",
     shipper_phone: s.shipper_phone ?? "",
     shipper_email: s.shipper_email ?? "",
+    free_shipping_threshold: s.free_shipping_threshold ?? "",
   }
 }
 
@@ -210,6 +221,7 @@ const DhlParcelSettingsPage = () => {
     shipper_country_code: "NL",
     shipper_phone: "",
     shipper_email: "",
+    free_shipping_threshold: "",
   })
   const [fieldErrors, setFieldErrors] = useState<FormErrors>({})
   const [saveError, setSaveError] = useState<string | null>(null)
@@ -276,6 +288,8 @@ const DhlParcelSettingsPage = () => {
           shipper_country_code: values.shipper_country_code.trim().toUpperCase(),
           shipper_phone: values.shipper_phone.trim(),
           shipper_email: values.shipper_email.trim(),
+          free_shipping_threshold:
+            values.free_shipping_threshold.trim().replace(",", ".") || null,
         }),
       })
 
@@ -291,7 +305,7 @@ const DhlParcelSettingsPage = () => {
       }
 
       setPersisted(true)
-      toast.success("Adresgegevens opgeslagen")
+      toast.success("Instellingen opgeslagen")
     } catch (err) {
       setSaveError(err instanceof Error ? err.message : "Onbekende fout")
     } finally {
@@ -532,6 +546,34 @@ const DhlParcelSettingsPage = () => {
                   </Text>
                 )}
               </div>
+            </div>
+
+            {/* Gratis verzending */}
+            <div className="flex flex-col gap-1 border-t border-ui-border-base pt-6">
+              <Label htmlFor="free_shipping_threshold" size="small" weight="plus">
+                Gratis verzending vanaf (EUR)
+              </Label>
+              <Text size="small" className="text-ui-fg-subtle">
+                Bestellingen vanaf dit bedrag (excl. verzendkosten) krijgen
+                automatisch gratis verzending op alle DHL-opties. Laat leeg om
+                gratis verzending uit te zetten.
+              </Text>
+              <Input
+                id="free_shipping_threshold"
+                type="text"
+                inputMode="decimal"
+                value={values.free_shipping_threshold}
+                onChange={(e) =>
+                  setField("free_shipping_threshold", e.target.value)
+                }
+                placeholder="bijv. 75"
+                className="max-w-[200px]"
+              />
+              {fieldErrors.free_shipping_threshold && (
+                <Text size="xsmall" className="text-ui-fg-error">
+                  {fieldErrors.free_shipping_threshold}
+                </Text>
+              )}
             </div>
           </div>
 

@@ -1,5 +1,7 @@
 // Pure validation helper — no framework imports so tests need no Medusa boot.
 
+import { validateFreeShippingThreshold } from '../../../lib/free-shipping-threshold'
+
 const NL_POSTAL_CODE_RE = /^\d{4}\s?[A-Z]{2}$/
 const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]+$/
 
@@ -49,6 +51,10 @@ export function validateShipperSettings(body: Record<string, unknown>): string[]
       errors.push('Field "shipper_number" must be a string when provided')
     }
   }
+
+  // free_shipping_threshold: optional. Empty / null / undefined = free shipping
+  // OFF. When provided it must parse to a finite, non-negative number (EUR).
+  errors.push(...validateFreeShippingThreshold(body.free_shipping_threshold))
 
   return errors
 }

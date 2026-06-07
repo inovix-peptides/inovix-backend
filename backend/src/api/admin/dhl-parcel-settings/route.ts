@@ -1,5 +1,8 @@
 import type { MedusaRequest, MedusaResponse } from '@medusajs/framework'
+import type { Logger } from '@medusajs/framework/types'
 import { DHL_PARCEL_SHIPPER } from '../../../lib/constants'
+import { applyFreeShippingToDhlOptions } from '../../../lib/apply-free-shipping'
+import { normalizeThreshold } from '../../../lib/free-shipping-threshold'
 import { validateShipperSettings } from './validate'
 
 // Infer the shape of a persisted settings row
@@ -13,6 +16,7 @@ type SettingsRow = {
   shipper_country_code: string
   shipper_phone: string
   shipper_email: string
+  free_shipping_threshold: string | null
 }
 
 /**
@@ -42,6 +46,7 @@ export const GET = async (req: MedusaRequest, res: MedusaResponse) => {
     shipper_country_code: DHL_PARCEL_SHIPPER.countryCode,
     shipper_phone: DHL_PARCEL_SHIPPER.phone,
     shipper_email: DHL_PARCEL_SHIPPER.email,
+    free_shipping_threshold: null,
   }
 
   return res.json({ dhl_parcel_settings: envDefaults, persisted: false })
@@ -63,6 +68,10 @@ export const PUT = async (req: MedusaRequest, res: MedusaResponse) => {
   const service = req.scope.resolve('dhl_parcel_settings') as any
   const existing: SettingsRow[] = await service.listDhlParcelSettings({})
 
+  // Normalize the threshold to a clean number (or null = off) and persist it as
+  // text, matching the model column.
+  const threshold = normalizeThreshold(body.free_shipping_threshold)
+
   const payload = {
     shipper_name: body.shipper_name,
     shipper_street: body.shipper_street,
@@ -72,6 +81,7 @@ export const PUT = async (req: MedusaRequest, res: MedusaResponse) => {
     shipper_country_code: body.shipper_country_code,
     shipper_phone: body.shipper_phone,
     shipper_email: body.shipper_email,
+    free_shipping_threshold: threshold != null ? String(threshold) : null,
   }
 
   let saved: SettingsRow
@@ -84,5 +94,23 @@ export const PUT = async (req: MedusaRequest, res: MedusaResponse) => {
     saved = await service.createDhlParcelSettings(payload)
   }
 
-  return res.json({ dhl_parcel_settings: saved })
+  // Sync the conditional €0 shipping price onto the DHL options. Saved already,
+  // so if this fails we still report the saved row plus the error (re-saving
+  // retries the sync).
+  try {
+    const freeShipping = await applyFreeShippingToDhlOptions(
+      req.scope,
+      threshold,
+    )
+    return res.json({ dhl_parcel_settings: saved, free_shipping: freeShipping })
+  } catch (err) {
+    const logger = req.scope.resolve('logger') as Logger
+    logger.error(
+      `dhl-parcel-settings: saved threshold but failed to apply free-shipping price: ${(err as Error).message}`,
+    )
+    return res.status(500).json({
+      dhl_parcel_settings: saved,
+      free_shipping_error: (err as Error).message,
+    })
+  }
 }

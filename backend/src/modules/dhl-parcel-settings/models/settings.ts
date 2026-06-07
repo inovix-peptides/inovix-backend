@@ -10,4 +10,8 @@ export const DhlParcelSettings = model.define('dhl_parcel_settings', {
   shipper_country_code: model.text().default('NL'),
   shipper_phone: model.text(),
   shipper_email: model.text(),
+  // Free-shipping threshold in EUR major units, stored as text (like Medusa's
+  // product.weight) and coerced with Number() on read. null/empty = no free
+  // shipping. Changing it re-syncs a conditional €0 price on the DHL options.
+  free_shipping_threshold: model.text().nullable(),
 })
