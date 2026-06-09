@@ -29,13 +29,21 @@ import {
 import { CSS } from "@dnd-kit/utilities"
 import { useEffect, useMemo, useState } from "react"
 
+type Variant = {
+  id: string
+  title: string | null
+}
+
 type Product = {
   id: string
   title: string
   thumbnail: string | null
   metadata: Record<string, unknown> | null
   created_at?: string | null
+  variants?: Variant[]
 }
+
+const AUTO_VARIANT = "__auto__"
 
 type Slot = string | null
 type HomepageSlots = [Slot, Slot, Slot]
@@ -59,6 +67,13 @@ function readHomepagePosition(
   if (p === 1 || p === 2 || p === 3) return p
   if (p === "1" || p === "2" || p === "3") return Number(p) as 1 | 2 | 3
   return null
+}
+
+function readFeaturedVariantId(
+  metadata: Record<string, unknown> | null | undefined
+): string | null {
+  const v = metadata?.featured_variant_id
+  return typeof v === "string" && v.length > 0 ? v : null
 }
 
 function sortByDisplayOrder(products: Product[]): Product[] {
@@ -159,21 +174,28 @@ function SortableRow({
 function HomepageSlotCard({
   position,
   productId,
+  variantId,
   products,
   usedIds,
   onChange,
   onClear,
+  onVariantChange,
 }: {
   position: 1 | 2 | 3
   productId: string | null
+  variantId: string | null
   products: Product[]
   usedIds: Set<string>
   onChange: (id: string) => void
   onClear: () => void
+  onVariantChange: (variantId: string | null) => void
 }) {
   const product = productId
     ? products.find((p) => p.id === productId)
     : undefined
+
+  const variants = product?.variants ?? []
+  const hasMultipleVariants = variants.length > 1
 
   const selectable = useMemo(
     () =>
@@ -244,6 +266,37 @@ function HomepageSlotCard({
           ))}
         </Select.Content>
       </Select>
+
+      {product && hasMultipleVariants && (
+        <div className="flex flex-col gap-1">
+          <Text
+            size="xsmall"
+            className="uppercase tracking-wider text-ui-fg-muted"
+          >
+            Welke maat tonen
+          </Text>
+          <Select
+            value={variantId ?? AUTO_VARIANT}
+            onValueChange={(v) =>
+              onVariantChange(v === AUTO_VARIANT ? null : v)
+            }
+          >
+            <Select.Trigger>
+              <Select.Value placeholder="Automatisch (laagste prijs)" />
+            </Select.Trigger>
+            <Select.Content>
+              <Select.Item value={AUTO_VARIANT}>
+                Automatisch (laagste prijs)
+              </Select.Item>
+              {variants.map((v) => (
+                <Select.Item key={v.id} value={v.id}>
+                  {v.title ?? v.id}
+                </Select.Item>
+              ))}
+            </Select.Content>
+          </Select>
+        </div>
+      )}
     </div>
   )
 }
@@ -257,6 +310,12 @@ const ProductOrderPage = () => {
     null,
     null,
   ])
+  const [featuredVariants, setFeaturedVariants] = useState<
+    Record<string, string | null>
+  >({})
+  const [originalFeaturedVariants, setOriginalFeaturedVariants] = useState<
+    Record<string, string | null>
+  >({})
   const [originalOrder, setOriginalOrder] = useState<string[]>([])
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
@@ -277,7 +336,7 @@ const ProductOrderPage = () => {
     ;(async () => {
       try {
         const res = await fetch(
-          "/admin/products?limit=500&fields=id,title,thumbnail,metadata,created_at",
+          "/admin/products?limit=500&fields=id,title,thumbnail,metadata,created_at,variants.id,variants.title",
           { credentials: "include" }
         )
         if (!res.ok) {
@@ -289,11 +348,14 @@ const ProductOrderPage = () => {
         const sorted = sortByDisplayOrder(data.products)
         const ids = sorted.map((p) => p.id)
         const slots: HomepageSlots = [null, null, null]
+        const variantMap: Record<string, string | null> = {}
         sorted.forEach((p) => {
           const pos = readHomepagePosition(p.metadata)
           if (pos !== null && slots[pos - 1] === null) {
             slots[pos - 1] = p.id
           }
+          const fv = readFeaturedVariantId(p.metadata)
+          if (fv !== null) variantMap[p.id] = fv
         })
 
         setProducts(sorted)
@@ -301,6 +363,8 @@ const ProductOrderPage = () => {
         setOriginalOrder(ids)
         setHomepage(slots)
         setOriginalHomepage([...slots] as HomepageSlots)
+        setFeaturedVariants(variantMap)
+        setOriginalFeaturedVariants({ ...variantMap })
         setLoading(false)
       } catch (err) {
         if (cancelled) return
@@ -341,8 +405,21 @@ const ProductOrderPage = () => {
     for (let i = 0; i < 3; i++) {
       if (homepage[i] !== originalHomepage[i]) return true
     }
+    for (const id of homepage) {
+      if (!id) continue
+      if ((featuredVariants[id] ?? null) !== (originalFeaturedVariants[id] ?? null)) {
+        return true
+      }
+    }
     return false
-  }, [orderedIds, originalOrder, homepage, originalHomepage])
+  }, [
+    orderedIds,
+    originalOrder,
+    homepage,
+    originalHomepage,
+    featuredVariants,
+    originalFeaturedVariants,
+  ])
 
   const handleDragEnd = (event: DragEndEvent) => {
     const { active, over } = event
@@ -366,6 +443,13 @@ const ProductOrderPage = () => {
       next[slot] = value
       return next
     })
+  }
+
+  const setVariantForProduct = (productId: string, variantId: string | null) => {
+    setFeaturedVariants((current) => ({
+      ...current,
+      [productId]: variantId,
+    }))
   }
 
   const handleSave = async () => {
@@ -395,6 +479,32 @@ const ProductOrderPage = () => {
         return true
       })
 
+      const featuredVariantChanges: {
+        id: string
+        variant_id: string | null
+      }[] = []
+      // Currently featured products: persist their chosen variant (or auto/null).
+      for (const id of homepage) {
+        if (!id) continue
+        featuredVariantChanges.push({
+          id,
+          variant_id: featuredVariants[id] ?? null,
+        })
+      }
+      // Products dropped from the homepage: clear their featured variant.
+      for (const id of originalHomepage) {
+        if (id && !homepage.includes(id)) {
+          featuredVariantChanges.push({ id, variant_id: null })
+        }
+      }
+
+      const seenVariants = new Set<string>()
+      const dedupedFeaturedVariants = featuredVariantChanges.filter((c) => {
+        if (seenVariants.has(c.id)) return false
+        seenVariants.add(c.id)
+        return true
+      })
+
       const res = await fetch("/admin/products/reorder", {
         method: "POST",
         credentials: "include",
@@ -402,6 +512,7 @@ const ProductOrderPage = () => {
         body: JSON.stringify({
           shop_ranks,
           homepage_positions: dedupedHomepage,
+          featured_variants: dedupedFeaturedVariants,
         }),
       })
       if (!res.ok) {
@@ -411,6 +522,7 @@ const ProductOrderPage = () => {
 
       setOriginalOrder(orderedIds)
       setOriginalHomepage([...homepage] as HomepageSlots)
+      setOriginalFeaturedVariants({ ...featuredVariants })
       toast.success("Volgorde opgeslagen")
     } catch (err) {
       toast.error("Opslaan mislukt", {
@@ -424,6 +536,7 @@ const ProductOrderPage = () => {
   const handleReset = () => {
     setOrderedIds([...originalOrder])
     setHomepage([...originalHomepage] as HomepageSlots)
+    setFeaturedVariants({ ...originalFeaturedVariants })
   }
 
   if (loading) {
@@ -466,10 +579,15 @@ const ProductOrderPage = () => {
               key={i}
               position={(i + 1) as 1 | 2 | 3}
               productId={homepage[i]}
+              variantId={homepage[i] ? featuredVariants[homepage[i] as string] ?? null : null}
               products={products}
               usedIds={homepageUsedIds}
               onChange={(id) => setSlot(i as 0 | 1 | 2, id)}
               onClear={() => setSlot(i as 0 | 1 | 2, null)}
+              onVariantChange={(variantId) => {
+                const id = homepage[i]
+                if (id) setVariantForProduct(id, variantId)
+              }}
             />
           ))}
         </div>

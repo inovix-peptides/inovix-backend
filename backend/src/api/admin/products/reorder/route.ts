@@ -12,9 +12,15 @@ type PositionEntry = {
   position: 1 | 2 | 3 | null
 }
 
+type FeaturedVariantEntry = {
+  id: string
+  variant_id: string | null
+}
+
 type Body = {
   shop_ranks?: RankEntry[]
   homepage_positions?: PositionEntry[]
+  featured_variants?: FeaturedVariantEntry[]
 }
 
 function isValidRank(r: unknown): r is number | null {
@@ -23,6 +29,10 @@ function isValidRank(r: unknown): r is number | null {
 
 function isValidPosition(p: unknown): p is 1 | 2 | 3 | null {
   return p === null || p === 1 || p === 2 || p === 3
+}
+
+function isValidVariantId(v: unknown): v is string | null {
+  return v === null || (typeof v === "string" && v.length > 0)
 }
 
 export async function POST(
@@ -35,6 +45,9 @@ export async function POST(
   const shopRanks = Array.isArray(body.shop_ranks) ? body.shop_ranks : []
   const homepagePositions = Array.isArray(body.homepage_positions)
     ? body.homepage_positions
+    : []
+  const featuredVariants = Array.isArray(body.featured_variants)
+    ? body.featured_variants
     : []
 
   for (const entry of shopRanks) {
@@ -71,9 +84,24 @@ export async function POST(
     }
   }
 
+  for (const entry of featuredVariants) {
+    if (
+      !entry ||
+      typeof entry.id !== "string" ||
+      !isValidVariantId(entry.variant_id)
+    ) {
+      res.status(400).json({
+        error:
+          "featured_variants entries must be { id: string, variant_id: string|null }",
+      })
+      return
+    }
+  }
+
   const productIds = new Set<string>()
   shopRanks.forEach((r) => productIds.add(r.id))
   homepagePositions.forEach((p) => productIds.add(p.id))
+  featuredVariants.forEach((f) => productIds.add(f.id))
 
   if (productIds.size === 0) {
     res.status(200).json({ ok: true, updated: 0 })
@@ -93,6 +121,9 @@ export async function POST(
   const rankById = new Map(shopRanks.map((r) => [r.id, r.rank]))
   const positionById = new Map(
     homepagePositions.map((p) => [p.id, p.position])
+  )
+  const featuredVariantById = new Map(
+    featuredVariants.map((f) => [f.id, f.variant_id])
   )
 
   type Update = { id: string; metadata: Record<string, unknown> }
@@ -121,6 +152,15 @@ export async function POST(
         delete metadata.homepage_position
       } else {
         metadata.homepage_position = position
+      }
+    }
+
+    if (featuredVariantById.has(id)) {
+      const variantId = featuredVariantById.get(id)
+      if (variantId === null || variantId === undefined) {
+        delete metadata.featured_variant_id
+      } else {
+        metadata.featured_variant_id = variantId
       }
     }
 
