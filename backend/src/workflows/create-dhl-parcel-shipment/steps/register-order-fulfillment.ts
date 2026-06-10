@@ -44,6 +44,46 @@ const registerOrderFulfillment = createStep(
       items: input.items.map((i) => ({ id: i.id, quantity: i.quantity })),
     })
 
+    // 3. Inventory: for managed variants the goods are leaving, so decrement the
+    //    stocked quantity AND release the reservation (mirrors Medusa's native
+    //    adjustInventoryLevelsStep + deleteReservationsStep). Both move together
+    //    so `available = stocked - reserved` stays correct. Unmanaged variants
+    //    have no reservation -> skipped. Best-effort: a failure here must NOT
+    //    block the (already created + linked) fulfillment, so we log loudly and
+    //    continue | the stock drift is then a manual correction, not a stuck order.
+    try {
+      const query = container.resolve(ContainerRegistrationKeys.QUERY)
+      const inventoryService: any = container.resolve(Modules.INVENTORY)
+      const { data: reservations } = await query.graph({
+        entity: "reservation",
+        fields: ["id", "inventory_item_id", "location_id", "quantity"],
+        filters: { line_item_id: input.items.map((i) => i.id) },
+      })
+      const rs = (reservations ?? []) as Array<{
+        id: string
+        inventory_item_id: string
+        location_id: string
+        quantity: number
+      }>
+      if (rs.length > 0) {
+        await inventoryService.adjustInventory(
+          rs.map((r) => ({
+            inventoryItemId: r.inventory_item_id,
+            locationId: r.location_id,
+            adjustment: -Number(r.quantity),
+          }))
+        )
+        await inventoryService.deleteReservationItems(rs.map((r) => r.id))
+      }
+    } catch (err) {
+      const logger = container.resolve(ContainerRegistrationKeys.LOGGER)
+      logger.error(
+        `[dhl-parcel] inventory adjustment failed for order ${input.order_id} ` +
+          `(fulfillment created + linked; stocked/reservation may need manual correction): ` +
+          `${(err as Error).message}`
+      )
+    }
+
     return new StepResponse({ linked: true })
   },
 )

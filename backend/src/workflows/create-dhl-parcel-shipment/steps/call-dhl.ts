@@ -1,5 +1,5 @@
 import { createStep, StepResponse } from "@medusajs/framework/workflows-sdk"
-import { Modules, MedusaError } from "@medusajs/framework/utils"
+import { ContainerRegistrationKeys, Modules, MedusaError } from "@medusajs/framework/utils"
 
 export type CallDhlInput = {
   order_id: string
@@ -37,6 +37,29 @@ const callDhl = createStep(
       )
     }
 
+    // The order's stock reservations (created at checkout for managed variants).
+    // We stamp inventory_item_id onto each fulfillment item from these so that
+    // Medusa's native CANCEL flow can restore stock later (it only restores for
+    // fulfillment items that carry inventory_item_id). Unmanaged variants have no
+    // reservation, so those items keep inventory_item_id undefined.
+    const query = container.resolve(ContainerRegistrationKeys.QUERY)
+    const lineItemIds = (items as Array<Record<string, any>>)
+      .map((i) => i.id)
+      .filter(Boolean)
+    const invItemByLineItem = new Map<string, string>()
+    if (lineItemIds.length > 0) {
+      const { data: reservations } = await query.graph({
+        entity: "reservation",
+        fields: ["line_item_id", "inventory_item_id"],
+        filters: { line_item_id: lineItemIds },
+      })
+      for (const r of reservations as Array<Record<string, any>>) {
+        if (r.line_item_id && r.inventory_item_id) {
+          invItemByLineItem.set(r.line_item_id, r.inventory_item_id)
+        }
+      }
+    }
+
     // Map order line items to the shape Medusa's fulfillment module requires for
     // FulfillmentItem rows. Order line items snapshot the sku/barcode under
     // variant_sku / variant_barcode (NOT sku / barcode), so passing them straight
@@ -44,12 +67,14 @@ const callDhl = createStep(
     // 'undefined' found". Mirror Medusa's own canonical mapping
     // (@medusajs/core-flows order/workflows/create-fulfillment.js): sku =
     // variant_sku || "", barcode = variant_barcode || "", title = variant_title
-    // ?? title, line_item_id = the order line item id.
+    // ?? title, line_item_id = the order line item id. inventory_item_id is added
+    // for managed variants (see above).
     // (Item weight is NOT needed here: build-payload already put
     // dhl_total_weight_grams on `data`, which the provider uses; the items-based
     // weight fallback only matters for a direct provider call outside the workflow.)
     const fulfillmentItems = (items as Array<Record<string, any>>).map((i) => ({
       line_item_id: i.id,
+      inventory_item_id: invItemByLineItem.get(i.id),
       quantity: i.quantity,
       title: i.variant_title ?? i.title ?? "Item",
       sku: i.variant_sku || i.variant?.sku || "",

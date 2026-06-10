@@ -15,7 +15,8 @@ jest.mock("@medusajs/framework/utils", () => {
     }
   }
   return {
-    Modules: { FULFILLMENT: "fulfillment", STOCK_LOCATION: "stock-location" },
+    Modules: { FULFILLMENT: "fulfillment", STOCK_LOCATION: "stock-location", INVENTORY: "inventory" },
+    ContainerRegistrationKeys: { QUERY: "query", LINK: "link", LOGGER: "logger" },
     MedusaError,
   }
 })
@@ -27,6 +28,7 @@ import callDhl from "../steps/call-dhl"
 function makeContainer(
   fulfillment: any,
   stockLocations: any[] = [{ id: "loc_1" }],
+  reservations: any[] = [],
 ) {
   const stockLocationService = {
     listStockLocations: jest.fn(async () => stockLocations),
@@ -34,10 +36,16 @@ function makeContainer(
   const fulfillmentService = {
     createFulfillment: jest.fn(async () => fulfillment),
   }
+  // call-dhl resolves QUERY to look up the order's reservations (for stamping
+  // inventory_item_id onto the fulfillment items).
+  const queryService = {
+    graph: jest.fn(async () => ({ data: reservations })),
+  }
   const container = {
     resolve: jest.fn((key: string) => {
       if (key === "stock-location") return stockLocationService
       if (key === "fulfillment") return fulfillmentService
+      if (key === "query") return queryService
       throw new Error(`Unexpected resolve key: ${key}`)
     }),
   }
@@ -62,7 +70,9 @@ describe("call-dhl step (DHL Parcel)", () => {
 
   it("invokes createFulfillment with provider_id, location, the FULL order, and the mapped fulfillment items", async () => {
     const created = { id: "ful_1", data: { dhl_tracking_number: "JVGL123NL" } }
-    const { container, __fulfillmentService } = makeContainer(created)
+    const { container, __fulfillmentService } = makeContainer(created, [{ id: "loc_1" }], [
+      { id: "resitem_1", line_item_id: "li_1", inventory_item_id: "iitem_1", location_id: "loc_1", quantity: 2 },
+    ])
 
     await callDhl(
       {
@@ -90,9 +100,10 @@ describe("call-dhl step (DHL Parcel)", () => {
       shipping_address: deliveryAddress,
       label_attempt: 1,
     })
-    // items mapped to Medusa's FulfillmentItem shape (sku/barcode from variant_*).
+    // items mapped to Medusa's FulfillmentItem shape (sku/barcode from variant_*),
+    // with inventory_item_id stamped from the reservation (so cancel can restore).
     expect(arg.items).toEqual([
-      { line_item_id: "li_1", quantity: 2, title: "10 ml", sku: "PW-10", barcode: "8710000000001" },
+      { line_item_id: "li_1", inventory_item_id: "iitem_1", quantity: 2, title: "10 ml", sku: "PW-10", barcode: "8710000000001" },
     ])
     // delivery_address must have its id stripped (Medusa assigns a fresh one).
     expect(arg.delivery_address).toEqual({ country_code: "nl", postal_code: "3000AA" })
