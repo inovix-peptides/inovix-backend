@@ -412,6 +412,13 @@ const OrderDhlParcelWidget = ({ data }: DetailWidgetProps<AdminOrder>) => {
 
   if (hasLabel && dhlFulfillment) {
     const isShipped = Boolean(dhlFulfillment.shipped_at)
+    const shippedAtLabel = dhlFulfillment.shipped_at
+      ? new Date(dhlFulfillment.shipped_at).toLocaleDateString("nl-NL", {
+          day: "numeric",
+          month: "long",
+          year: "numeric",
+        })
+      : null
     return (
       <>
         <Container className="divide-y p-0">
@@ -435,6 +442,30 @@ const OrderDhlParcelWidget = ({ data }: DetailWidgetProps<AdminOrder>) => {
             </span>
           </div>
           <div className="flex flex-col gap-3 px-6 py-4">
+            {/* Prominent shipped / not-shipped status so the admin always knows
+                the next step at a glance. */}
+            {isShipped ? (
+              <div style={{ border: "1px solid #86efac", background: "#f0fdf4", padding: "10px 12px" }}>
+                <Text size="small" weight="plus" style={{ color: "#166534" }}>
+                  Verzonden{shippedAtLabel ? ` op ${shippedAtLabel}` : ""}
+                </Text>
+                <Text size="small" style={{ color: "#15803d", marginTop: "2px" }}>
+                  De klant heeft de track-and-trace mail ontvangen. Geen actie meer nodig.
+                </Text>
+              </div>
+            ) : (
+              <div style={{ border: "1px solid #fcd34d", background: "#fffbeb", padding: "10px 12px" }}>
+                <Text size="small" weight="plus" style={{ color: "#92400e" }}>
+                  Label klaar | NOG NIET verzonden
+                </Text>
+                <Text size="small" style={{ color: "#78350f", marginTop: "2px" }}>
+                  Klik op &quot;Markeer als verzonden &amp; mail klant&quot; zodra je het
+                  pakket bij DHL afgeeft. De klant krijgt dan automatisch de
+                  track-and-trace mail.
+                </Text>
+              </div>
+            )}
+
             {/* Option badge */}
             <div className="flex items-center gap-2">
               <Text size="small" className="text-ui-fg-subtle">

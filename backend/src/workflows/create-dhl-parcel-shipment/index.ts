@@ -7,6 +7,9 @@ import registerOrderFulfillment from "./steps/register-order-fulfillment"
 
 export type CreateDhlParcelShipmentInput = {
   order: any
+  // Attempt number (1-based) used to seed a fresh DHL labelId on a redo after a
+  // canceled label. Defaults to 1.
+  labelAttempt?: number
 }
 
 export const createDhlParcelShipmentWorkflow = createWorkflow(
@@ -18,6 +21,7 @@ export const createDhlParcelShipmentWorkflow = createWorkflow(
       order_id: input.order.id,
       order_display_id: input.order.display_id,
       order_email: input.order.email,
+      order_label_attempt: input.labelAttempt,
       payload,
       delivery_address: input.order.shipping_address,
     })

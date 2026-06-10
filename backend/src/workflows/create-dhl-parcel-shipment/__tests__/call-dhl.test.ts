@@ -88,6 +88,7 @@ describe("call-dhl step (DHL Parcel)", () => {
       display_id: 1042,
       email: "klant@example.com",
       shipping_address: deliveryAddress,
+      label_attempt: 1,
     })
     // items mapped to Medusa's FulfillmentItem shape (sku/barcode from variant_*).
     expect(arg.items).toEqual([

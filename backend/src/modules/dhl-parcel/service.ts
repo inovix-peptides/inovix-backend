@@ -131,8 +131,9 @@ class DhlParcelFulfillmentProviderService extends AbstractFulfillmentProviderSer
     //    still derives ONE fixed labelId (idempotent retries) with no
     //    cross-environment collision. REFERENCE below stays display_id (the
     //    human-readable order number printed on the label).
+    const labelAttempt = (ord as { label_attempt?: number }).label_attempt ?? 1
     const labelId: string =
-      data.dhl_label_id ?? uuidv5(`${ord.id}-1`, DHL_LABEL_NAMESPACE)
+      data.dhl_label_id ?? uuidv5(`${ord.id}-${labelAttempt}`, DHL_LABEL_NAMESPACE)
 
     // 3. Parcel type. The build-payload step sets this from the chosen box
     //    preset. It is absent when an operator uses Medusa's native "Create

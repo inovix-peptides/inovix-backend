@@ -99,6 +99,19 @@ export async function POST(
     return
   }
 
+  // 1c. Label attempt number = how many DHL fulfillments this order already had
+  //     (including canceled ones) + 1. The provider seeds the DHL labelId from
+  //     order.id + this number, so canceling a wrong label and creating a new
+  //     one yields a FRESH DHL label instead of colliding with the old one (DHL
+  //     permanently reserves a used label id, so without this the recovery would
+  //     just hand back the old, wrong label).
+  const priorDhlFulfillments = ((raw.fulfillments ?? []) as any[]).filter(
+    (f: any) =>
+      f.provider_id === "dhl-parcel_dhl-parcel" ||
+      typeof f.data?.dhl_tracking_number === "string"
+  ).length
+  const labelAttempt = priorDhlFulfillments + 1
+
   // 2. Reshape items: expose item.product = item.variant?.product so the
   //    workflow (validate-order / build-payload / service) reads
   //    item.product.weight as expected. The natural Medusa v2 graph path is
@@ -116,7 +129,7 @@ export async function POST(
   // 3. Run the workflow.
   try {
     const { result } = await createDhlParcelShipmentWorkflow(req.scope).run({
-      input: { order },
+      input: { order, labelAttempt },
     })
 
     // 4. Map the response. Prefer fulfillment.data.* fields (written by

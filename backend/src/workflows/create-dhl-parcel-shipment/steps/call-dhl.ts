@@ -9,6 +9,8 @@ export type CallDhlInput = {
   // DHL rejects the label with 400.
   order_display_id?: number
   order_email?: string | null
+  // 1-based attempt number; seeds a fresh labelId on a redo after cancel.
+  order_label_attempt?: number
   // The full output of the build-payload step: the dhl_* data fields plus the
   // enriched `items`. This step separates `items` (passed to the fulfillment
   // module) from the rest (persisted on the fulfillment as `data`).
@@ -93,6 +95,8 @@ const callDhl = createStep(
         display_id: input.order_display_id,
         email: input.order_email,
         shipping_address: input.delivery_address ?? {},
+        // Seeds the deterministic labelId (provider step 2): order.id + attempt.
+        label_attempt: input.order_label_attempt ?? 1,
       },
       data,
       metadata: {},

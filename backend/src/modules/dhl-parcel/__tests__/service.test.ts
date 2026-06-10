@@ -427,4 +427,19 @@ describe("DhlParcelFulfillmentProviderService", () => {
     const absentInput = client.createLabel.mock.calls[0][0]
     expect(absentInput.options.some((o: { key: string }) => o.key === "SSN")).toBe(false)
   })
+
+  // ─── Test 11: labelId rotates with the attempt number (redo after cancel) ────
+  it("createFulfillment seeds a fresh labelId from order.label_attempt (redo)", async () => {
+    const client = makeMockClient()
+    client.createLabel.mockResolvedValue(SAMPLE_LABEL_RESPONSE)
+    const { svc } = await makeService(client)
+
+    const order = { ...sampleOrder(), label_attempt: 2 }
+    await svc.createFulfillment(BASE_DATA, SAMPLE_ITEMS, order, {})
+
+    const input = client.createLabel.mock.calls[0][0]
+    expect(input.labelId).toBe(uuidv5(`${order.id}-2`, DHL_LABEL_NAMESPACE))
+    // Different from the first-attempt id, so DHL won't 409-collide with the old label.
+    expect(input.labelId).not.toBe(uuidv5(`${order.id}-1`, DHL_LABEL_NAMESPACE))
+  })
 })
