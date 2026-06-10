@@ -10,8 +10,14 @@ import { createDhlParcelShipmentWorkflow } from "../../../../../workflows/create
 //   After loading, each item is reshaped so item.product = item.variant?.product,
 //   matching the shape the workflow's validate-order / build-payload / service steps
 //   all expect at item.product.weight.
-// - shipping_methods.shipping_option.*: needed by findDhlParcelMethod to read
-//   shipping_option.provider_id and shipping_option.data.dhl_option.
+// - shipping_methods.data: carries the DHL DOOR/PS selection (dhl_option) and,
+//   for Servicepunt, the service_point_id. findDhlParcelMethod detects the DHL
+//   method from this. Do NOT request shipping_methods.shipping_option(.*): that
+//   order_shipping_method -> fulfillment shipping_option cross-module expansion
+//   is unresolvable on the live admin query and throws "Cannot read properties
+//   of undefined (reading 'strategy')", which 500s the whole label request
+//   BEFORE the try/catch below (it broke order #13 on 2026-06-10). The order
+//   widget hit the same wall and dropped it too | see order-dhl-parcel.tsx.
 const ORDER_FIELDS = [
   "id",
   "display_id",
@@ -21,9 +27,9 @@ const ORDER_FIELDS = [
   "*items",
   "*items.variant",
   "*items.variant.product",
-  "*shipping_methods",
+  "shipping_methods.id",
+  "shipping_methods.data",
   "shipping_methods.shipping_option_id",
-  "*shipping_methods.shipping_option",
 ]
 
 export async function POST(
