@@ -4,29 +4,37 @@ import type { Logger } from "@medusajs/framework/types"
 import { createDhlParcelShipmentWorkflow } from "../../../../../workflows/create-dhl-parcel-shipment"
 
 // Fields loaded via query.graph to give the workflow everything it reads.
-// - items.variant.product.weight: the REAL product-weight path in Medusa v2
-//   (confirmed from node_modules/@medusajs/medusa/dist/api/admin/orders/query-config.js
-//   which uses "*items.variant" + "*items.variant.product").
-//   After loading, each item is reshaped so item.product = item.variant?.product,
-//   matching the shape the workflow's validate-order / build-payload / service steps
-//   all expect at item.product.weight.
+//
+// query.graph SYNTAX (both verified against prod order #13 on 2026-06-10):
+//  1. Use TRAILING-star nested paths ("items.variant.product.*"), NOT the
+//     leading-star dotted form ("*items.variant.product"). The leading-star
+//     form is what the admin HTTP ?fields= parser / query-config defaults
+//     accept, but a direct query.graph call rejects a leading star on a dotted
+//     path with "Entity 'Order' does not have property '*items'".
+//  2. Do NOT request shipping_methods.shipping_option(.*): that
+//     order_shipping_method -> fulfillment shipping_option cross-module
+//     expansion is unresolvable here and throws "Cannot read properties of
+//     undefined (reading 'strategy')". Both errors 500 the label request BEFORE
+//     the try/catch below; (2) was the original order #13 failure and (1) was
+//     hiding behind it. The order widget hit the same walls, see
+//     order-dhl-parcel.tsx.
+//
+// - items.variant.product.*: the product-weight path. After loading, each item
+//   is reshaped so item.product = item.variant?.product, matching the shape the
+//   workflow's validate-order / build-payload / service steps expect at
+//   item.product.weight.
 // - shipping_methods.data: carries the DHL DOOR/PS selection (dhl_option) and,
 //   for Servicepunt, the service_point_id. findDhlParcelMethod detects the DHL
-//   method from this. Do NOT request shipping_methods.shipping_option(.*): that
-//   order_shipping_method -> fulfillment shipping_option cross-module expansion
-//   is unresolvable on the live admin query and throws "Cannot read properties
-//   of undefined (reading 'strategy')", which 500s the whole label request
-//   BEFORE the try/catch below (it broke order #13 on 2026-06-10). The order
-//   widget hit the same wall and dropped it too | see order-dhl-parcel.tsx.
+//   method from this (provider_id is not needed).
 const ORDER_FIELDS = [
   "id",
   "display_id",
   "status",
   "email",
-  "*shipping_address",
-  "*items",
-  "*items.variant",
-  "*items.variant.product",
+  "shipping_address.*",
+  "items.*",
+  "items.variant.*",
+  "items.variant.product.*",
   "shipping_methods.id",
   "shipping_methods.data",
   "shipping_methods.shipping_option_id",
