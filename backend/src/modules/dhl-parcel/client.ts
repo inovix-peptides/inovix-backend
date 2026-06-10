@@ -34,6 +34,13 @@ export class DhlParcelClient {
     return this.requestPdf(`/labels/${labelId}`)
   }
 
+  async getLabel(labelId: string): Promise<DhlParcelLabelResponse> {
+    // GET /labels/{id} returns the full label JSON (trackerCode, pdf, routingCode,
+    // ...), verified live. Used to recover the already-created label when
+    // createLabel returns 409 shipment_already_exists (idempotent retry).
+    return this.request<DhlParcelLabelResponse>("GET", `/labels/${labelId}`)
+  }
+
   async listServicePoints(
     countryCode: string,
     opts: { postalCode?: string; city?: string; q?: string; limit?: number },

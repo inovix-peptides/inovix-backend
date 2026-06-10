@@ -246,6 +246,25 @@ describe("DhlParcelClient", () => {
     expect(result).toBe(expectedBase64)
   })
 
+  // ─── Extra: getLabel GETs /labels/{id} as JSON (for 409 idempotent recovery) ─
+  test("getLabel sends Accept: application/json and returns the parsed label JSON", async () => {
+    mockFetch.mockResolvedValue(jsonResponse(SAMPLE_LABEL_RESPONSE, 200))
+
+    const tokenCache = makeTokenCache()
+    const client = new DhlParcelClient(BASE, tokenCache, 0)
+    const result = await client.getLabel("label-xyz")
+
+    expect(mockFetch).toHaveBeenCalledTimes(1)
+    const [url, init] = mockFetch.mock.calls[0] as [string, RequestInit]
+    expect(url).toBe(`${BASE}/labels/label-xyz`)
+    expect(init.method).toBe("GET")
+
+    const headers = new Headers(init.headers as HeadersInit)
+    expect(headers.get("Accept")).toBe("application/json")
+
+    expect(result).toEqual(SAMPLE_LABEL_RESPONSE)
+  })
+
   // ─── Extra: getAccountNumbers delegates to tokenCache ────────────────────────
   test("getAccountNumbers delegates to tokenCache.getAccountNumbers", async () => {
     const tokenCache = makeTokenCache("token", ["ACC001", "ACC002"])

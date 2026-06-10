@@ -1,4 +1,5 @@
 import { v5 as uuidv5 } from "uuid"
+import { DhlParcelApiError } from "../types"
 
 // AbstractFulfillmentProviderService pulls in the whole Medusa framework at
 // import time; stub it (and MedusaError) so the service can be unit-tested in
@@ -40,6 +41,7 @@ const DHL_LABEL_NAMESPACE = "1b671a64-40d5-491e-99b0-da01ff1f3341"
 
 type MockClient = {
   createLabel: jest.Mock
+  getLabel: jest.Mock
   getLabelPdf: jest.Mock
   getAccountNumbers: jest.Mock
   tryCancelLabel: jest.Mock
@@ -48,6 +50,7 @@ type MockClient = {
 function makeMockClient(overrides: Partial<MockClient> = {}): MockClient {
   return {
     createLabel: jest.fn(),
+    getLabel: jest.fn(),
     getLabelPdf: jest.fn(),
     getAccountNumbers: jest.fn(async () => ["ACC-0001"]),
     tryCancelLabel: jest.fn(async () => ({ cancelled: true })),
@@ -254,6 +257,62 @@ describe("DhlParcelFulfillmentProviderService", () => {
         label_url: "data:application/pdf;base64,PREV",
       },
     ])
+  })
+
+  // ─── Test 5b: createFulfillment recovers from a DHL 409 (idempotent) ─────────
+  it("createFulfillment recovers from a 409 shipment_already_exists by returning the existing label", async () => {
+    const client = makeMockClient()
+    client.createLabel.mockRejectedValue(
+      new DhlParcelApiError(
+        "DHL Parcel POST /labels failed with 409",
+        409,
+        { key: "shipment_already_exists", message: "Shipment x already exists." },
+        "https://api.dhl-parcel.test/labels",
+      ),
+    )
+    client.getLabel.mockResolvedValue({
+      ...SAMPLE_LABEL_RESPONSE,
+      trackerCode: "JVGL-EXISTING",
+      pdf: "RVhJU1RJTkc=",
+    })
+    const { svc, logger } = await makeService(client)
+
+    const order = sampleOrder()
+    const result = await svc.createFulfillment(BASE_DATA, SAMPLE_ITEMS, order, {})
+
+    const expectedLabelId = uuidv5(`${order.display_id}-1`, DHL_LABEL_NAMESPACE)
+    expect(client.createLabel).toHaveBeenCalledTimes(1)
+    expect(client.getLabel).toHaveBeenCalledWith(expectedLabelId)
+    // Returns the EXISTING label's tracking + pdf, as if freshly created.
+    expect(result.data).toMatchObject({
+      dhl_label_id: expectedLabelId,
+      dhl_tracking_number: "JVGL-EXISTING",
+    })
+    expect(result.data.dhl_label_pdf_url).toBe("data:application/pdf;base64,RVhJU1RJTkc=")
+    expect(result.labels[0]).toMatchObject({
+      tracking_number: "JVGL-EXISTING",
+      label_url: "data:application/pdf;base64,RVhJU1RJTkc=",
+    })
+    expect(logger.info).toHaveBeenCalledWith(expect.stringContaining("already exists"))
+  })
+
+  // ─── Test 5c: non-409 DHL errors propagate (no existing-label fetch) ─────────
+  it("createFulfillment rethrows non-409 DHL errors and does not fetch an existing label", async () => {
+    const client = makeMockClient()
+    client.createLabel.mockRejectedValue(
+      new DhlParcelApiError(
+        "DHL Parcel POST /labels failed with 400",
+        400,
+        { key: "validation_error" },
+        "https://api.dhl-parcel.test/labels",
+      ),
+    )
+    const { svc } = await makeService(client)
+
+    await expect(
+      svc.createFulfillment(BASE_DATA, SAMPLE_ITEMS, sampleOrder(), {}),
+    ).rejects.toThrow()
+    expect(client.getLabel).not.toHaveBeenCalled()
   })
 
   // ─── Test 6: createFulfillment PS option ─────────────────────────────────────

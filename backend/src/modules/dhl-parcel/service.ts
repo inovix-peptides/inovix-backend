@@ -20,8 +20,10 @@ import { sumOrderWeightGrams } from "./box-selector"
 import { DhlParcelClient } from "./client"
 import { TokenCache } from "./token-cache"
 import {
+  DhlParcelApiError,
   DhlParcelContact,
   DhlParcelCreateLabelInput,
+  DhlParcelLabelResponse,
   DhlParcelOption,
   DhlParcelParcelType,
 } from "./types"
@@ -191,7 +193,31 @@ class DhlParcelFulfillmentProviderService extends AbstractFulfillmentProviderSer
       options,
       pieces,
     }
-    const response = await this.client.createLabel(input)
+    let response: DhlParcelLabelResponse
+    try {
+      response = await this.client.createLabel(input)
+    } catch (err) {
+      // Idempotent recovery. The labelId is derived deterministically from the
+      // order (step 2), so DHL replies 409 shipment_already_exists when a label
+      // was already bought for this order: the operator clicked "Maak DHL-label"
+      // twice, or is retrying after the DHL label succeeded but the Medusa
+      // fulfillment was rolled back (the module deletes the fulfillment on a
+      // provider error). Re-fetch and return the existing label instead of
+      // failing | the operator gets the same label, the order is not stranded,
+      // and DHL is not charged twice.
+      if (
+        err instanceof DhlParcelApiError &&
+        err.status === 409 &&
+        (err.body as { key?: string } | null)?.key === "shipment_already_exists"
+      ) {
+        this.logger_.info(
+          `[dhl-parcel] label ${labelId} already exists at DHL; returning the existing label (idempotent)`,
+        )
+        response = await this.client.getLabel(labelId)
+      } else {
+        throw err
+      }
+    }
 
     // 12. Tracking number.
     const trackingNumber = response.trackerCode
