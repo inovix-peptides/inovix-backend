@@ -1,7 +1,7 @@
 import type { MedusaRequest, MedusaResponse } from "@medusajs/framework"
 import type { Logger } from "@medusajs/framework/types"
 import { ContainerRegistrationKeys } from "@medusajs/framework/utils"
-import { refundPaymentWorkflow } from "@medusajs/core-flows"
+import { refundPaymentWorkflow } from "@medusajs/medusa/core-flows"
 
 import {
   buildPaymentView,

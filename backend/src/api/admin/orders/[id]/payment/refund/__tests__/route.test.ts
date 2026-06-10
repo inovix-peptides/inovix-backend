@@ -3,7 +3,7 @@ import type { MedusaRequest, MedusaResponse } from "@medusajs/framework"
 // Mock the refund workflow so we never boot the real Medusa workflow engine.
 const runMock = jest.fn().mockResolvedValue({ result: {}, errors: [] })
 const workflowFactory = jest.fn().mockReturnValue({ run: runMock })
-jest.mock("@medusajs/core-flows", () => ({
+jest.mock("@medusajs/medusa/core-flows", () => ({
   refundPaymentWorkflow: (...args: unknown[]) => workflowFactory(...args),
 }))
 
