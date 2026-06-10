@@ -15,6 +15,8 @@ export const createDhlParcelShipmentWorkflow = createWorkflow(
     const payload = buildPayload({ order: input.order })
     const fulfillment = callDhl({
       order_id: input.order.id,
+      order_display_id: input.order.display_id,
+      order_email: input.order.email,
       payload,
       delivery_address: input.order.shipping_address,
     })
