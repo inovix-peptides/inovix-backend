@@ -183,7 +183,7 @@ describe("DhlParcelFulfillmentProviderService", () => {
     const input = client.createLabel.mock.calls[0][0]
 
     // Deterministic labelId from display_id
-    const expectedLabelId = uuidv5(`${order.display_id}-1`, DHL_LABEL_NAMESPACE)
+    const expectedLabelId = uuidv5(`${order.id}-1`, DHL_LABEL_NAMESPACE)
     expect(input.labelId).toBe(expectedLabelId)
 
     // parcel type from data
@@ -260,13 +260,13 @@ describe("DhlParcelFulfillmentProviderService", () => {
   })
 
   // ─── Test 5b: createFulfillment recovers from a DHL 409 (idempotent) ─────────
-  it("createFulfillment recovers from a 409 shipment_already_exists by returning the existing label", async () => {
+  it("createFulfillment recovers from any 409 (e.g. tracker_code_conflict) by returning the existing label", async () => {
     const client = makeMockClient()
     client.createLabel.mockRejectedValue(
       new DhlParcelApiError(
         "DHL Parcel POST /labels failed with 409",
         409,
-        { key: "shipment_already_exists", message: "Shipment x already exists." },
+        { key: "tracker_code_conflict", message: "Request id x was already used by another (different) request" },
         "https://api.dhl-parcel.test/labels",
       ),
     )
@@ -280,7 +280,7 @@ describe("DhlParcelFulfillmentProviderService", () => {
     const order = sampleOrder()
     const result = await svc.createFulfillment(BASE_DATA, SAMPLE_ITEMS, order, {})
 
-    const expectedLabelId = uuidv5(`${order.display_id}-1`, DHL_LABEL_NAMESPACE)
+    const expectedLabelId = uuidv5(`${order.id}-1`, DHL_LABEL_NAMESPACE)
     expect(client.createLabel).toHaveBeenCalledTimes(1)
     expect(client.getLabel).toHaveBeenCalledWith(expectedLabelId)
     // Returns the EXISTING label's tracking + pdf, as if freshly created.

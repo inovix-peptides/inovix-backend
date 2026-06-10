@@ -52,18 +52,26 @@ const payload = {
   dhl_box_dimensions: { length: 28, width: 20, height: 12 },
   dhl_total_weight_grams: 300,
   total_units: 2,
-  items: [{ quantity: 2, product: { weight: 150 } }],
+  items: [
+    { id: "li_1", quantity: 2, variant_title: "10 ml", variant_sku: "PW-10", variant_barcode: "8710000000001", product: { weight: 150 } },
+  ],
 }
 
 describe("call-dhl step (DHL Parcel)", () => {
-  const deliveryAddress = { country_code: "nl", postal_code: "3000AA" }
+  const deliveryAddress = { id: "addr_1", country_code: "nl", postal_code: "3000AA" }
 
-  it("invokes createFulfillment with provider_id dhl-parcel_dhl-parcel, the location, order, and the enriched items", async () => {
+  it("invokes createFulfillment with provider_id, location, the FULL order, and the mapped fulfillment items", async () => {
     const created = { id: "ful_1", data: { dhl_tracking_number: "JVGL123NL" } }
     const { container, __fulfillmentService } = makeContainer(created)
 
     await callDhl(
-      { order_id: "order_1", payload, delivery_address: deliveryAddress } as any,
+      {
+        order_id: "order_1",
+        order_display_id: 1042,
+        order_email: "klant@example.com",
+        payload,
+        delivery_address: deliveryAddress,
+      } as any,
       { container } as any,
     )
 
@@ -73,9 +81,20 @@ describe("call-dhl step (DHL Parcel)", () => {
     const arg = __fulfillmentService.createFulfillment.mock.calls[0][0]
     expect(arg.provider_id).toBe("dhl-parcel_dhl-parcel")
     expect(arg.location_id).toBe("loc_1")
-    expect(arg.order).toEqual({ id: "order_1" })
-    expect(arg.items).toEqual(payload.items)
-    expect(arg.delivery_address).toEqual(deliveryAddress)
+    // FULL order (not just { id }) so the provider can build the receiver,
+    // the deterministic labelId and the REFERENCE; shipping_address carries the id.
+    expect(arg.order).toEqual({
+      id: "order_1",
+      display_id: 1042,
+      email: "klant@example.com",
+      shipping_address: deliveryAddress,
+    })
+    // items mapped to Medusa's FulfillmentItem shape (sku/barcode from variant_*).
+    expect(arg.items).toEqual([
+      { line_item_id: "li_1", quantity: 2, title: "10 ml", sku: "PW-10", barcode: "8710000000001" },
+    ])
+    // delivery_address must have its id stripped (Medusa assigns a fresh one).
+    expect(arg.delivery_address).toEqual({ country_code: "nl", postal_code: "3000AA" })
   })
 
   it("passes the dhl_* data fields (minus items) as the fulfillment data", async () => {

@@ -122,9 +122,17 @@ class DhlParcelFulfillmentProviderService extends AbstractFulfillmentProviderSer
     const ord = order ?? {}
     const shippingAddress: ShippingAddress = ord.shipping_address ?? {}
 
-    // 2. Deterministic labelId (idempotency seed at DHL).
+    // 2. Deterministic labelId (idempotency seed at DHL). Seeded from the
+    //    globally-unique order id, NOT display_id. DHL permanently reserves a
+    //    used "request id" (labelId); display_id is a small sequential int, so a
+    //    label created under one key/environment burns that id for another
+    //    (observed live as 409 "tracker_code_conflict": request id already used
+    //    by a different request). order.id is unique + stable, so each order
+    //    still derives ONE fixed labelId (idempotent retries) with no
+    //    cross-environment collision. REFERENCE below stays display_id (the
+    //    human-readable order number printed on the label).
     const labelId: string =
-      data.dhl_label_id ?? uuidv5(`${ord.display_id}-1`, DHL_LABEL_NAMESPACE)
+      data.dhl_label_id ?? uuidv5(`${ord.id}-1`, DHL_LABEL_NAMESPACE)
 
     // 3. Parcel type. The build-payload step sets this from the chosen box
     //    preset. It is absent when an operator uses Medusa's native "Create
@@ -205,13 +213,15 @@ class DhlParcelFulfillmentProviderService extends AbstractFulfillmentProviderSer
       // provider error). Re-fetch and return the existing label instead of
       // failing | the operator gets the same label, the order is not stranded,
       // and DHL is not charged twice.
-      if (
-        err instanceof DhlParcelApiError &&
-        err.status === 409 &&
-        (err.body as { key?: string } | null)?.key === "shipment_already_exists"
-      ) {
+      // DHL returns 409 with more than one body key when the labelId is already
+      // taken: "shipment_already_exists" (identical re-submit) and
+      // "tracker_code_conflict" ("request id already used by a different
+      // request", observed with the live key). Recover on ANY 409 by fetching
+      // the existing label rather than string-matching one specific key.
+      if (err instanceof DhlParcelApiError && err.status === 409) {
+        const key = (err.body as { key?: string } | null)?.key
         this.logger_.info(
-          `[dhl-parcel] label ${labelId} already exists at DHL; returning the existing label (idempotent)`,
+          `[dhl-parcel] label ${labelId} already exists at DHL (409 ${key ?? "?"}); returning the existing label (idempotent)`,
         )
         response = await this.client.getLabel(labelId)
       } else {
