@@ -38,6 +38,15 @@ const ORDER_FIELDS = [
   "shipping_methods.id",
   "shipping_methods.data",
   "shipping_methods.shipping_option_id",
+  // Existing fulfillments: used to refuse buying a second label for an order
+  // that already has one (idempotency guard below).
+  "fulfillments.id",
+  "fulfillments.provider_id",
+  "fulfillments.canceled_at",
+  "fulfillments.data",
+  "fulfillments.labels.tracking_number",
+  "fulfillments.labels.tracking_url",
+  "fulfillments.labels.label_url",
 ]
 
 export async function POST(
@@ -58,6 +67,35 @@ export async function POST(
   const raw = orders?.[0]
   if (!raw) {
     res.status(404).json({ message: `Order ${orderId} not found` })
+    return
+  }
+
+  // 1b. Idempotency guard: if this order already has a (non-canceled) DHL
+  //     fulfillment with a tracking number, return it instead of buying a
+  //     second label. The widget hides the create button once a label exists,
+  //     but this is the server-side backstop against a double POST.
+  const existing = ((raw.fulfillments ?? []) as any[]).find((f) => {
+    if (f.canceled_at) return false
+    const trackingFromLabel = (f.labels ?? []).some(
+      (l: any) => l.tracking_number != null && l.tracking_number !== ""
+    )
+    const trackingFromData = typeof f.data?.dhl_tracking_number === "string"
+    const isDhl = f.provider_id === "dhl-parcel_dhl-parcel" || trackingFromData
+    return isDhl && (trackingFromData || trackingFromLabel)
+  })
+  if (existing) {
+    const d: any = existing.data ?? {}
+    const l: any = existing.labels?.[0] ?? {}
+    logger.info(
+      `admin.dhl-label: order ${orderId} already has fulfillment ${existing.id}; returning existing label (no second label bought)`
+    )
+    res.status(200).json({
+      fulfillment_id: existing.id,
+      tracking_number: d.dhl_tracking_number ?? l.tracking_number ?? null,
+      label_pdf_url: d.dhl_label_pdf_url ?? l.label_url ?? null,
+      shipment_tracking_url: d.dhl_shipment_tracking_url ?? l.tracking_url ?? null,
+      already_existed: true,
+    })
     return
   }
 

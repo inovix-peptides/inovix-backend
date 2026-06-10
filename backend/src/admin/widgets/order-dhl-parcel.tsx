@@ -32,6 +32,8 @@ type FulfillmentLabel = {
 type DhlFulfillment = {
   id: string
   provider_id: string
+  shipped_at?: string | null
+  canceled_at?: string | null
   data?: Record<string, unknown> | null
   labels?: FulfillmentLabel[]
 }
@@ -72,6 +74,8 @@ const ORDER_FIELDS = [
   "shipping_methods.shipping_option_id",
   "fulfillments.id",
   "fulfillments.provider_id",
+  "fulfillments.shipped_at",
+  "fulfillments.canceled_at",
   "fulfillments.data",
   "fulfillments.labels.tracking_number",
   "fulfillments.labels.tracking_url",
@@ -102,15 +106,19 @@ function findDhlFulfillment(order: FetchedOrder): DhlFulfillment | null {
   const fulfillments = order.fulfillments ?? []
   return (
     fulfillments.find((f) => {
-      // Check provider_id first
-      if (f.provider_id === "dhl-parcel") {
+      // Ignore canceled fulfillments.
+      if (f.canceled_at) {
+        return false
+      }
+      // Provider is registered under the COMPOSED id `dhl-parcel_dhl-parcel`.
+      if (f.provider_id === "dhl-parcel" || f.provider_id === "dhl-parcel_dhl-parcel") {
         return true
       }
-      // Also check data fields written by our provider service
+      // Also check data fields written by our provider service.
       if (f.data?.dhl_tracking_number) {
         return true
       }
-      // Check labels
+      // Check labels.
       return (f.labels ?? []).some(
         (l) => l.tracking_number != null && l.tracking_number !== ""
       )
@@ -225,12 +233,14 @@ type SendEmailPromptProps = {
   open: boolean
   onOpenChange: (open: boolean) => void
   orderId: string
+  isShipped?: boolean
 }
 
 function SendEmailPrompt({
   open,
   onOpenChange,
   orderId,
+  isShipped,
 }: SendEmailPromptProps) {
   const [busy, setBusy] = useState(false)
 
@@ -252,7 +262,11 @@ function SendEmailPrompt({
       if (!res.ok) {
         throw new Error(body.message ?? `Verzenden mislukt (${res.status})`)
       }
-      toast.success("Verzendmail verstuurd naar klant")
+      toast.success(
+        isShipped
+          ? "Verzendmail opnieuw verstuurd naar klant"
+          : "Gemarkeerd als verzonden | klant gemaild"
+      )
       onOpenChange(false)
     } catch (err) {
       toast.error("Verzendmail verzenden mislukt", {
@@ -268,18 +282,23 @@ function SendEmailPrompt({
     <Prompt open={open} onOpenChange={onOpenChange}>
       <Prompt.Content>
         <Prompt.Header>
-          <Prompt.Title>Verzendmail sturen</Prompt.Title>
+          <Prompt.Title>
+            {isShipped ? "Verzendmail opnieuw sturen" : "Markeer als verzonden"}
+          </Prompt.Title>
           <Prompt.Description>
-            Dit stuurt de klant eenmalig de verzendmail met de track-and-trace
-            link. De klant ontvangt deze mail slechts eenmaal; stuur hem niet
-            opnieuw tenzij de klant aangeeft hem niet ontvangen te hebben.
-            Doorgaan?
+            {isShipped
+              ? "Deze bestelling is al gemarkeerd als verzonden. Dit stuurt de klant nogmaals dezelfde verzendmail met de track-and-trace link. Doe dit alleen als de klant de mail niet ontvangen heeft. Doorgaan?"
+              : "Hiermee wordt de bestelling gemarkeerd als verzonden en ontvangt de klant eenmalig de verzendmail met de track-and-trace link. Doorgaan?"}
           </Prompt.Description>
         </Prompt.Header>
         <Prompt.Footer>
           <Prompt.Cancel disabled={busy}>Annuleren</Prompt.Cancel>
           <Prompt.Action onClick={handleConfirm}>
-            {busy ? "Sturen..." : "Sturen"}
+            {busy
+              ? "Bezig..."
+              : isShipped
+                ? "Opnieuw sturen"
+                : "Markeer als verzonden"}
           </Prompt.Action>
         </Prompt.Footer>
       </Prompt.Content>
@@ -392,6 +411,7 @@ const OrderDhlParcelWidget = ({ data }: DetailWidgetProps<AdminOrder>) => {
   const hasLabel = Boolean(trackingNumber)
 
   if (hasLabel && dhlFulfillment) {
+    const isShipped = Boolean(dhlFulfillment.shipped_at)
     return (
       <>
         <Container className="divide-y p-0">
@@ -399,10 +419,20 @@ const OrderDhlParcelWidget = ({ data }: DetailWidgetProps<AdminOrder>) => {
             <div className="flex flex-col gap-1">
               <Heading level="h2">DHL Parcel NL</Heading>
               <Text size="small" className="text-ui-fg-subtle">
-                Het label is aangemaakt. Download het of stuur de klant de
-                verzendmail.
+                {isShipped
+                  ? "Verzonden | de klant heeft de track-and-trace mail ontvangen."
+                  : "Het label is aangemaakt. Markeer als verzonden zodra je het pakket afgeeft; de klant krijgt dan de verzendmail."}
               </Text>
             </div>
+            <span
+              className={
+                isShipped
+                  ? "border border-ui-tag-green-border bg-ui-tag-green-bg px-2 py-0.5 text-[10px] uppercase tracking-wider text-ui-tag-green-text"
+                  : "border border-ui-border-base bg-ui-bg-subtle px-2 py-0.5 text-[10px] uppercase tracking-wider text-ui-fg-subtle"
+              }
+            >
+              {isShipped ? "Verzonden" : "Label klaar"}
+            </span>
           </div>
           <div className="flex flex-col gap-3 px-6 py-4">
             {/* Option badge */}
@@ -459,7 +489,7 @@ const OrderDhlParcelWidget = ({ data }: DetailWidgetProps<AdminOrder>) => {
               size="small"
               onClick={() => setEmailOpen(true)}
             >
-              Verzendmail sturen
+              {isShipped ? "Verzendmail opnieuw sturen" : "Markeer als verzonden & mail klant"}
             </Button>
           </div>
         </Container>
@@ -468,6 +498,7 @@ const OrderDhlParcelWidget = ({ data }: DetailWidgetProps<AdminOrder>) => {
           open={emailOpen}
           onOpenChange={setEmailOpen}
           orderId={orderId}
+          isShipped={isShipped}
         />
       </>
     )

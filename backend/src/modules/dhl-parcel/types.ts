@@ -6,6 +6,7 @@ export type DhlParcelOptionKey =
   | 'INS'       // insurance (unused v1, off by default)
   | 'REFERENCE' // custom reference on label
   | 'HANDT'     // signature required (DOOR only — mutually exclusive with PS per /capabilities)
+  | 'SSN'       // undisclosed sender: hide the sender on the label (free, NL; accepted standalone)
 
 // Parcel type keys as returned by DHL Parcel /capabilities/business endpoint
 // (NL-to-NL, B2C, verified 2026-06-06):

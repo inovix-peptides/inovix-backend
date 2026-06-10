@@ -14,4 +14,7 @@ export const DhlParcelSettings = model.define('dhl_parcel_settings', {
   // product.weight) and coerced with Number() on read. null/empty = no free
   // shipping. Changing it re-syncs a conditional €0 price on the DHL options.
   free_shipping_threshold: model.text().nullable(),
+  // When true (default), the label flow adds the DHL "SSN" option so the sender
+  // is hidden on the label (the recipient does not see who sent it). Free, NL.
+  hide_sender: model.boolean().default(true),
 })

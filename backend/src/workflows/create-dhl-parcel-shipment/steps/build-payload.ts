@@ -70,11 +70,16 @@ const buildPayload = createStep(
     // gracefully: if the module is missing or the list is empty we leave
     // dhl_shipper undefined so the service falls back to the env constant.
     let dhl_shipper: DhlParcelContact | undefined
+    // Hide the sender on the label by default (DHL "SSN" option). Operator can
+    // turn this off in admin Settings > DHL Parcel; only an explicit false shows
+    // the sender.
+    let dhl_hide_sender = true
     try {
       const settingsService = container.resolve(DHL_PARCEL_SETTINGS_MODULE)
       const rows: any[] = await settingsService.listDhlParcelSettings({})
       const row = rows[0]
       if (row) {
+        dhl_hide_sender = row.hide_sender !== false
         dhl_shipper = {
           name: { companyName: row.shipper_name },
           address: {
@@ -121,6 +126,7 @@ const buildPayload = createStep(
       total_units: totalUnits,
       items: enrichedItems,
       dhl_shipper,
+      dhl_hide_sender,
     })
   },
 )

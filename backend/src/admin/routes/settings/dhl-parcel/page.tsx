@@ -9,6 +9,7 @@ import {
   Input,
   Label,
   StatusBadge,
+  Switch,
   Text,
   toast,
 } from "@medusajs/ui"
@@ -27,6 +28,7 @@ type DhlParcelSettings = {
   shipper_phone: string
   shipper_email: string
   free_shipping_threshold?: string | null
+  hide_sender?: boolean
 }
 
 type GetSettingsResponse = {
@@ -61,6 +63,7 @@ type FormValues = {
   shipper_phone: string
   shipper_email: string
   free_shipping_threshold: string
+  hide_sender: boolean
 }
 
 type FormErrors = Partial<Record<keyof FormValues, string>>
@@ -121,6 +124,7 @@ function settingsToForm(s: DhlParcelSettings): FormValues {
     shipper_phone: s.shipper_phone ?? "",
     shipper_email: s.shipper_email ?? "",
     free_shipping_threshold: s.free_shipping_threshold ?? "",
+    hide_sender: s.hide_sender !== false,
   }
 }
 
@@ -222,6 +226,7 @@ const DhlParcelSettingsPage = () => {
     shipper_phone: "",
     shipper_email: "",
     free_shipping_threshold: "",
+    hide_sender: true,
   })
   const [fieldErrors, setFieldErrors] = useState<FormErrors>({})
   const [saveError, setSaveError] = useState<string | null>(null)
@@ -290,6 +295,7 @@ const DhlParcelSettingsPage = () => {
           shipper_email: values.shipper_email.trim(),
           free_shipping_threshold:
             values.free_shipping_threshold.trim().replace(",", ".") || null,
+          hide_sender: values.hide_sender,
         }),
       })
 
@@ -574,6 +580,27 @@ const DhlParcelSettingsPage = () => {
                   {fieldErrors.free_shipping_threshold}
                 </Text>
               )}
+            </div>
+
+            {/* Afzender verbergen op label (DHL SSN) */}
+            <div className="flex items-start justify-between gap-4 border-t border-ui-border-base pt-6">
+              <div className="flex flex-col gap-1">
+                <Label htmlFor="hide_sender" size="small" weight="plus">
+                  Afzender verbergen op label
+                </Label>
+                <Text size="small" className="text-ui-fg-subtle">
+                  Verbergt de afzender op het DHL-label, zodat de ontvanger niet
+                  ziet van wie het pakket komt (DHL SSN-optie, gratis). Aan =
+                  afzender verborgen op het label.
+                </Text>
+              </div>
+              <Switch
+                id="hide_sender"
+                checked={values.hide_sender}
+                onCheckedChange={(v) =>
+                  setValues((prev) => ({ ...prev, hide_sender: v }))
+                }
+              />
             </div>
           </div>
 

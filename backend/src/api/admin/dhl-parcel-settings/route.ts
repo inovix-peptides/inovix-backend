@@ -17,6 +17,7 @@ type SettingsRow = {
   shipper_phone: string
   shipper_email: string
   free_shipping_threshold: string | null
+  hide_sender: boolean
 }
 
 /**
@@ -47,6 +48,7 @@ export const GET = async (req: MedusaRequest, res: MedusaResponse) => {
     shipper_phone: DHL_PARCEL_SHIPPER.phone,
     shipper_email: DHL_PARCEL_SHIPPER.email,
     free_shipping_threshold: null,
+    hide_sender: true,
   }
 
   return res.json({ dhl_parcel_settings: envDefaults, persisted: false })
@@ -82,6 +84,8 @@ export const PUT = async (req: MedusaRequest, res: MedusaResponse) => {
     shipper_phone: body.shipper_phone,
     shipper_email: body.shipper_email,
     free_shipping_threshold: threshold != null ? String(threshold) : null,
+    // Default to hiding the sender; only show it when explicitly set false.
+    hide_sender: body.hide_sender !== false,
   }
 
   let saved: SettingsRow

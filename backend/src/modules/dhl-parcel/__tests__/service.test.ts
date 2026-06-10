@@ -399,4 +399,32 @@ describe("DhlParcelFulfillmentProviderService", () => {
     expect(input.shipper.address.city).toBe("Utrecht")
     expect(input.shipper.address.isBusiness).toBe(true)
   })
+
+  // ─── Test 10: SSN (hidden sender) option ─────────────────────────────────────
+  it("createFulfillment adds the SSN option when data.dhl_hide_sender is true", async () => {
+    const client = makeMockClient()
+    client.createLabel.mockResolvedValue(SAMPLE_LABEL_RESPONSE)
+    const { svc } = await makeService(client)
+
+    await svc.createFulfillment({ ...BASE_DATA, dhl_hide_sender: true }, SAMPLE_ITEMS, sampleOrder(), {})
+
+    const input = client.createLabel.mock.calls[0][0]
+    expect(input.options).toContainEqual({ key: "SSN" })
+  })
+
+  it("createFulfillment omits the SSN option when dhl_hide_sender is false or absent", async () => {
+    const client = makeMockClient()
+    client.createLabel.mockResolvedValue(SAMPLE_LABEL_RESPONSE)
+    const { svc } = await makeService(client)
+
+    await svc.createFulfillment({ ...BASE_DATA, dhl_hide_sender: false }, SAMPLE_ITEMS, sampleOrder(), {})
+    const offInput = client.createLabel.mock.calls[0][0]
+    expect(offInput.options.some((o: { key: string }) => o.key === "SSN")).toBe(false)
+
+    // BASE_DATA has no dhl_hide_sender field at all -> also no SSN.
+    client.createLabel.mockClear()
+    await svc.createFulfillment(BASE_DATA, SAMPLE_ITEMS, sampleOrder(), {})
+    const absentInput = client.createLabel.mock.calls[0][0]
+    expect(absentInput.options.some((o: { key: string }) => o.key === "SSN")).toBe(false)
+  })
 })

@@ -186,6 +186,10 @@ class DhlParcelFulfillmentProviderService extends AbstractFulfillmentProviderSer
         : { key: "DOOR" },
       { key: "REFERENCE", input: String(ord.display_id) },
       ...(data.dhl_option !== "PS" ? [{ key: "HANDT" } as DhlParcelOption] : []),
+      // SSN = undisclosed sender: hides the sender on the label so the recipient
+      // can't see who shipped it. Verified accepted standalone + with HANDT for
+      // NL->NL B2C. Defaults on; toggled via dhl_parcel_settings.hide_sender.
+      ...(data.dhl_hide_sender ? [{ key: "SSN" } as DhlParcelOption] : []),
     ]
 
     // 10. Pieces.

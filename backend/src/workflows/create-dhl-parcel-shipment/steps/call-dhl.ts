@@ -79,6 +79,10 @@ const callDhl = createStep(
       delivery_address: deliveryAddress,
       items: fulfillmentItems,
       labels: [],
+      // packed_at marks the fulfillment as packed so the order's aggregate
+      // fulfillment_status counts it as "fulfilled" (Medusa's native
+      // create-fulfillment sets this to now; the bare module call does not).
+      packed_at: new Date(),
       // The fulfillment module forwards this `order` to the provider VERBATIM
       // (fulfillment-module-service.createFulfillment). The dhl-parcel provider
       // reads order.shipping_address (receiver), order.display_id (labelId +
