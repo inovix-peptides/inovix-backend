@@ -302,23 +302,29 @@ class PaymentViaBrokerProviderService extends AbstractPaymentProvider<BrokerOpti
     const status = body.status
     if (!ref || !status) return this.notSupported()
 
+    // The broker callback body carries no amount (and the broker GET does not
+    // either), so leave it undefined: processPaymentWorkflow forwards it to
+    // capturePaymentWorkflow, which falls back to the payment's own full
+    // amount (`input.amount ?? capture.raw_amount ?? capture.amount`). A
+    // forced 0 here would be treated as a literal zero capture.
+    const amount = undefined as unknown as BigNumber
     const session_id = ref
     if (status === "captured") {
       return {
         action: "captured",
-        data: { session_id, amount: new BigNumber(0) },
+        data: { session_id, amount },
       }
     }
     if (status === "authorized") {
       return {
         action: "authorized",
-        data: { session_id, amount: new BigNumber(0) },
+        data: { session_id, amount },
       }
     }
     if (status === "failed" || status === "cancelled") {
       return {
         action: "failed",
-        data: { session_id, amount: new BigNumber(0) },
+        data: { session_id, amount },
       }
     }
     return this.notSupported()

@@ -109,3 +109,71 @@ describe("PaymentViaBrokerProviderService.initiatePayment", () => {
     expect((result.data as { cart_id?: string }).cart_id).toBe("cart_test_123")
   })
 })
+
+describe("PaymentViaBrokerProviderService.getWebhookActionAndData", () => {
+  const crypto = require("node:crypto") as typeof import("node:crypto")
+
+  function signedPayload(body: Record<string, unknown>) {
+    const rawBody = JSON.stringify(body)
+    const timestamp = String(Math.floor(Date.now() / 1000))
+    const signature = crypto
+      .createHmac("sha256", baseOptions.hmacSecret)
+      .update(`${timestamp}.${rawBody}`)
+      .digest("hex")
+    return {
+      data: body,
+      rawData: Buffer.from(rawBody),
+      headers: { "x-signature": signature, "x-timestamp": timestamp },
+    }
+  }
+
+  afterEach(() => jest.clearAllMocks())
+
+  test("captured callback with a valid signature maps to the captured action without forcing a zero amount", async () => {
+    const svc = new PaymentViaBrokerProviderService(
+      { logger: fakeLogger } as never,
+      baseOptions
+    )
+    const result = await svc.getWebhookActionAndData(
+      signedPayload({ ref: "pay_abc", status: "captured" }) as never
+    )
+    expect(result.action).toBe("captured")
+    expect((result.data as { session_id: string }).session_id).toBe("pay_abc")
+    // capturePaymentWorkflow must fall back to the payment's own amount, so
+    // the provider must NOT return a literal 0 here.
+    expect((result.data as { amount?: unknown }).amount).toBeUndefined()
+  })
+
+  test("authorized callback maps to the authorized action", async () => {
+    const svc = new PaymentViaBrokerProviderService(
+      { logger: fakeLogger } as never,
+      baseOptions
+    )
+    const result = await svc.getWebhookActionAndData(
+      signedPayload({ ref: "pay_abc", status: "authorized" }) as never
+    )
+    expect(result.action).toBe("authorized")
+  })
+
+  test("tampered signature maps to not_supported", async () => {
+    const svc = new PaymentViaBrokerProviderService(
+      { logger: fakeLogger } as never,
+      baseOptions
+    )
+    const payload = signedPayload({ ref: "pay_abc", status: "captured" })
+    payload.headers["x-signature"] = "0".repeat(64)
+    const result = await svc.getWebhookActionAndData(payload as never)
+    expect(result.action).toBe("not_supported")
+  })
+
+  test("failed callback maps to the failed action", async () => {
+    const svc = new PaymentViaBrokerProviderService(
+      { logger: fakeLogger } as never,
+      baseOptions
+    )
+    const result = await svc.getWebhookActionAndData(
+      signedPayload({ ref: "pay_abc", status: "failed" }) as never
+    )
+    expect(result.action).toBe("failed")
+  })
+})
