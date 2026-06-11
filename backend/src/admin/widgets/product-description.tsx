@@ -317,19 +317,13 @@ const ProductDescriptionWidget = ({ data }: DetailWidgetProps<AdminProduct>) => 
     const cleaned = html === "<p></p>" ? "" : html
 
     try {
-      const existing = (data.metadata ?? {}) as Record<string, unknown>
-      const nextMetadata: Record<string, unknown> = { ...existing }
-      if (cleaned) {
-        nextMetadata.long_description = cleaned
-      } else {
-        delete nextMetadata.long_description
-      }
-
-      const res = await fetch(`/admin/products/${data.id}`, {
+      // Merge only this key, server-side (null deletes), so we never clobber a
+      // concurrent edit from the translations widget on the same page.
+      const res = await fetch(`/admin/products/${data.id}/metadata`, {
         method: "POST",
         credentials: "include",
         headers: { "content-type": "application/json" },
-        body: JSON.stringify({ metadata: nextMetadata }),
+        body: JSON.stringify({ long_description: cleaned || null }),
       })
       if (!res.ok) {
         throw new Error(`opslaan mislukt (${res.status})`)

@@ -107,6 +107,16 @@ export const MEILISEARCH_HOST = process.env.MEILISEARCH_HOST;
 export const MEILISEARCH_ADMIN_KEY = process.env.MEILISEARCH_ADMIN_KEY;
 
 /**
+ * (optional) Auto-translation of product content (description / subtitle /
+ * long_description / category) into DE + EN via an LLM. When OPENAI_API_KEY is
+ * unset the product-translate subscriber no-ops, so the feature is inert until
+ * the key is provisioned. OPENAI_MODEL defaults to a cheap, translation-grade
+ * model; raise it for higher polish.
+ */
+export const OPENAI_API_KEY = process.env.OPENAI_API_KEY ?? '';
+export const OPENAI_MODEL = process.env.OPENAI_MODEL ?? 'gpt-4o-mini';
+
+/**
  * Worker mode
  */
 export const WORKER_MODE =
