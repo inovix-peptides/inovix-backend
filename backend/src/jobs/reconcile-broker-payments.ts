@@ -163,6 +163,13 @@ export default async function reconcileBrokerPayments(
         logger.warn(
           `[reconcile-broker-payments] cart ${cartId} is paid but did not complete (likely inventory/validation); will retry next tick`
         )
+        // Money has been taken but no order exists and completion is failing.
+        // The 3h lookback means this warn loop goes silent on its own, so the
+        // operator must hear about it while it is still actionable.
+        Sentry.captureMessage(
+          `[reconcile-broker-payments] cart ${cartId} (ref ${ref}) is PAID but cart completion keeps failing | money taken, no order`,
+          { level: "warning", tags: { job: "reconcile-broker-payments" } }
+        )
       }
     } catch (err) {
       logger.warn(
