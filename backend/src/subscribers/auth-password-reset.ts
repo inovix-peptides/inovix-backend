@@ -4,6 +4,11 @@ import { SubscriberArgs, SubscriberConfig } from '@medusajs/framework'
 import { BACKEND_URL, STOREFRONT_URL } from '../lib/constants'
 import { EmailTemplates } from '../modules/email-notifications/templates'
 import { Sentry } from '../lib/instrument'
+import {
+  resolveCustomerEmailLocaleByEmail,
+  type EmailLocale,
+} from '../lib/email-locale'
+import { PASSWORD_RESET_I18N } from '../modules/email-notifications/templates/email-i18n'
 
 type PasswordResetEventData = {
   entity_id: string
@@ -31,15 +36,20 @@ export default async function authPasswordResetHandler({
     `${baseUrl}${resetPath}?token=${encodeURIComponent(token)}` +
     `&email=${encodeURIComponent(email)}`
 
+  const locale: EmailLocale = isCustomer
+    ? await resolveCustomerEmailLocaleByEmail(container, email)
+    : 'nl'
+  const t = PASSWORD_RESET_I18N[locale] ?? PASSWORD_RESET_I18N.nl
+
   const subject = isCustomer
-    ? 'Herstel uw Inovix-wachtwoord'
+    ? t.subject
     : 'Reset your Inovix admin password'
 
   const textBody = isCustomer
-    ? `Er is een verzoek ingediend om het wachtwoord van uw Inovix-account te herstellen.\n\n` +
-      `Klik op de onderstaande link om een nieuw wachtwoord in te stellen. Deze link verloopt over 15 minuten.\n\n` +
+    ? `${t.intro}\n\n` +
+      `${t.instruction}\n\n` +
       `${resetLink}\n\n` +
-      `Heeft u geen wachtwoordherstel aangevraagd? Dan kunt u deze e-mail negeren, uw wachtwoord blijft ongewijzigd.`
+      `${t.ignore}`
     : `A request was made to reset the password on your Inovix admin account.\n\n` +
       `Set a new password via this link (expires in 15 minutes):\n\n` +
       `${resetLink}\n\n` +
@@ -54,6 +64,7 @@ export default async function authPasswordResetHandler({
         emailOptions: { subject, text: textBody },
         resetLink,
         actorType,
+        locale,
       },
     })
   } catch (error) {

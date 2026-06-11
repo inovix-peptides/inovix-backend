@@ -7,6 +7,11 @@ import {
 import { SubscriberArgs, SubscriberConfig } from '@medusajs/medusa'
 import { EmailTemplates } from '../modules/email-notifications/templates'
 import { Sentry } from '../lib/instrument'
+import { resolveCustomerEmailLocale } from '../lib/email-locale'
+import {
+  CUSTOMER_WELCOME_I18N,
+  FOOTER,
+} from '../modules/email-notifications/templates/email-i18n'
 
 const STOREFRONT_URL =
   process.env.STOREFRONT_URL?.replace(/\/$/, '') ?? 'https://inovix-peptides.nl'
@@ -32,29 +37,26 @@ export default async function customerCreatedHandler({
       return
     }
 
+    const locale = await resolveCustomerEmailLocale(container, customer.id)
+    const t = CUSTOMER_WELCOME_I18N[locale] ?? CUSTOMER_WELCOME_I18N.nl
+    const f = FOOTER[locale] ?? FOOTER.nl
     const replyTo = process.env.SUPPORT_EMAIL || process.env.CONTACT_EMAIL
     const greetingName = customer.first_name?.trim() || customer.email
     const productsUrl = `${STOREFRONT_URL}/products`
     const accountUrl = `${STOREFRONT_URL}/account`
 
     const textBody =
-      `Welkom bij Inovix\n\n` +
-      `Beste ${greetingName},\n\n` +
-      `Bedankt voor het aanmaken van uw account bij Inovix. U heeft nu ` +
-      `toegang tot ons volledige assortiment onderzoeksproducten, kunt eerdere ` +
-      `bestellingen inzien en verzendgegevens beheren.\n\n` +
-      `Hoe te bestellen:\n` +
-      `1. Bekijk ons assortiment: ${productsUrl}\n` +
-      `2. Voeg producten toe aan uw winkelwagen en ga naar checkout.\n` +
-      `3. Bevestig dat de bestelling uitsluitend voor onderzoek is en rond ` +
-      `de betaling af.\n\n` +
-      `Wij verzenden GMP gecertificeerde, HPLC getoetste peptiden door de ` +
-      `gehele EU. Standaard met tracking en discrete verpakking.\n\n` +
-      `Account beheren: ${accountUrl}\n\n` +
-      `Uitsluitend voor onderzoeksdoeleinden. Producten van Inovix zijn ` +
-      `bedoeld voor in-vitro laboratorium onderzoek en niet geschikt voor ` +
-      `menselijke of dierlijke consumptie, medische of cosmetische ` +
-      `toepassingen.`
+      `${t.heading}\n\n` +
+      `${t.greeting} ${greetingName},\n\n` +
+      `${t.body}\n\n` +
+      `${t.howToOrder}:\n` +
+      `${t.step1}\n` +
+      `${t.step2}\n` +
+      `${t.step3}\n\n` +
+      `${t.shippingNote}\n\n` +
+      `${t.browseButton}: ${productsUrl}\n` +
+      `${t.accountNotePre}${accountUrl}${t.accountNotePost}\n\n` +
+      `${f.disclaimerLead}${f.disclaimerBody}`
 
     await notificationModuleService.createNotifications({
       to: customer.email,
@@ -63,13 +65,14 @@ export default async function customerCreatedHandler({
       data: {
         emailOptions: {
           ...(replyTo ? { replyTo } : {}),
-          subject: 'Welkom bij Inovix',
+          subject: t.subject,
           text: textBody,
         },
         firstName: customer.first_name ?? null,
         email: customer.email,
         storefrontUrl: STOREFRONT_URL,
-        preview: 'Welkom bij Inovix',
+        locale,
+        preview: t.preview,
       },
     })
   } catch (error) {

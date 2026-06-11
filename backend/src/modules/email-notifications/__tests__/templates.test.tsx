@@ -137,11 +137,11 @@ describe('generateEmailTemplate', () => {
       shippedAt: new Date().toISOString(),
     }
 
-    it('renders "Volg je pakket" button with tracking_url href when label has tracking_url', () => {
+    it('renders "Volg uw pakket" button with tracking_url href when label has tracking_url', () => {
       const node = generateEmailTemplate('order-shipped', validShippedData)
       const html = ReactDOMServer.renderToStaticMarkup(node as React.ReactElement)
 
-      expect(html).toContain('Volg je pakket')
+      expect(html).toContain('Volg uw pakket')
       expect(html).toContain('https://www.dhlecommerce.nl/nl/consumer/track-and-trace?key=JVGL01234567890+1011AB')
     })
 
@@ -154,7 +154,7 @@ describe('generateEmailTemplate', () => {
       const html = ReactDOMServer.renderToStaticMarkup(node as React.ReactElement)
 
       expect(html).toContain('JVGL09999999999')
-      expect(html).not.toContain('Volg je pakket')
+      expect(html).not.toContain('Volg uw pakket')
     })
 
     it('throws MedusaError when required fields are missing', () => {

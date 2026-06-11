@@ -2,6 +2,8 @@ import { Text, Section, Hr, Row, Column, Link, Button } from '@react-email/compo
 import * as React from 'react'
 import { Base } from './base'
 import { OrderDTO, OrderAddressDTO } from '@medusajs/framework/types'
+import type { EmailLocale } from '../../../lib/email-locale'
+import { formatEmailDate, ORDER_SHIPPED_I18N } from './email-i18n'
 
 export const ORDER_SHIPPED = 'order-shipped'
 
@@ -25,6 +27,7 @@ export interface OrderShippedTemplateProps {
   labels: ShipmentLabel[]
   items: ShipmentItem[]
   shippedAt?: string | Date | null
+  locale?: EmailLocale
   preview?: string
 }
 
@@ -36,18 +39,6 @@ export const isOrderShippedTemplateData = (
   Array.isArray(data.labels) &&
   Array.isArray(data.items)
 
-function formatDateNL(date: string | Date) {
-  try {
-    return new Intl.DateTimeFormat('nl-NL', {
-      day: 'numeric',
-      month: 'long',
-      year: 'numeric',
-    }).format(new Date(date))
-  } catch {
-    return String(date)
-  }
-}
-
 export const OrderShippedTemplate: React.FC<OrderShippedTemplateProps> & {
   PreviewProps: OrderShippedTemplateProps
 } = ({
@@ -56,31 +47,32 @@ export const OrderShippedTemplate: React.FC<OrderShippedTemplateProps> & {
   labels,
   items,
   shippedAt,
-  preview = 'Uw bestelling is onderweg',
+  locale = 'nl',
+  preview,
 }) => {
+  const t = ORDER_SHIPPED_I18N[locale] ?? ORDER_SHIPPED_I18N.nl
   const trackedLabels = labels.filter(
     (l) => l.tracking_number || l.tracking_url
   )
 
   return (
-    <Base preview={preview}>
+    <Base preview={preview ?? t.preview} locale={locale}>
       <Section className="mt-[24px] text-center">
         <Text className="text-black text-[18px] font-semibold leading-[28px] m-0">
-          Uw bestelling is onderweg
+          {t.heading}
         </Text>
         <Text className="text-[#666666] text-[12px] leading-[20px] mt-[4px] mb-0">
-          Ordernummer #{order.display_id}
-          {shippedAt ? ` | verzonden ${formatDateNL(shippedAt)}` : ''}
+          {t.orderNumber} #{order.display_id}
+          {shippedAt ? ` | ${t.shippedOn} ${formatEmailDate(shippedAt, locale)}` : ''}
         </Text>
       </Section>
 
       <Section className="mt-[24px]">
         <Text className="text-black text-[14px] leading-[22px] m-0">
-          Beste {shippingAddress.first_name} {shippingAddress.last_name},
+          {t.greeting} {shippingAddress.first_name} {shippingAddress.last_name},
         </Text>
         <Text className="text-black text-[14px] leading-[22px] mt-[12px]">
-          Uw pakket is zojuist overgedragen aan de vervoerder. Hieronder vindt u
-          de trackinggegevens en de inhoud van deze zending.
+          {t.body}
         </Text>
       </Section>
 
@@ -89,16 +81,16 @@ export const OrderShippedTemplate: React.FC<OrderShippedTemplateProps> & {
           <Hr className="border border-solid border-[#eaeaea] my-[20px] mx-0 w-full" />
           <Section>
             <Text className="text-black text-[15px] font-semibold leading-[24px] m-0 mb-[4px]">
-              Je pakket is onderweg
+              {t.trackingHeading}
             </Text>
             <Text className="text-[#666666] text-[13px] leading-[20px] m-0 mb-[16px]">
-              Gebruik de knop hieronder om je zending live te volgen.
+              {t.trackingBody}
             </Text>
             {trackedLabels.map((label, idx) => (
               <Section key={idx} className="mb-[16px]">
                 {label.tracking_number ? (
                   <Text className="text-black text-[13px] leading-[20px] m-0 mb-[12px]">
-                    Trackingnummer:{' '}
+                    {t.trackingNumber}{' '}
                     <span className="font-semibold">
                       {label.tracking_number}
                     </span>
@@ -119,7 +111,7 @@ export const OrderShippedTemplate: React.FC<OrderShippedTemplateProps> & {
                       borderRadius: '0px',
                     }}
                   >
-                    Volg je pakket
+                    {t.trackButton}
                   </Button>
                 ) : null}
               </Section>
@@ -132,7 +124,7 @@ export const OrderShippedTemplate: React.FC<OrderShippedTemplateProps> & {
 
       <Section>
         <Text className="text-black text-[13px] font-semibold uppercase tracking-wide m-0 mb-[8px]">
-          Inhoud van deze zending
+          {t.contents}
         </Text>
         {items.map((item) => (
           <Row key={item.id} className="mb-[8px]">
@@ -140,7 +132,7 @@ export const OrderShippedTemplate: React.FC<OrderShippedTemplateProps> & {
               className="text-black text-[13px] leading-[20px]"
               align="left"
             >
-              {item.title ?? 'Artikel'}
+              {item.title ?? t.itemFallback}
             </Column>
             <Column
               className="text-black text-[13px] leading-[20px] whitespace-nowrap"
@@ -157,7 +149,7 @@ export const OrderShippedTemplate: React.FC<OrderShippedTemplateProps> & {
 
       <Section>
         <Text className="text-black text-[13px] font-semibold uppercase tracking-wide m-0 mb-[8px]">
-          Verzendadres
+          {t.shippingAddress}
         </Text>
         <Text className="text-black text-[13px] leading-[20px] m-0">
           {shippingAddress.first_name} {shippingAddress.last_name}

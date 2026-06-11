@@ -7,6 +7,8 @@ import {
 import { SubscriberArgs, SubscriberConfig } from '@medusajs/medusa'
 import { EmailTemplates } from '../modules/email-notifications/templates'
 import { Sentry } from '../lib/instrument'
+import { resolveOrderEmailLocale } from '../lib/email-locale'
+import { ORDER_REFUNDED_I18N } from '../modules/email-notifications/templates/email-i18n'
 
 type RefundEventData = {
   id: string
@@ -84,24 +86,22 @@ export default async function orderRefundedHandler({
       return
     }
 
+    const locale = await resolveOrderEmailLocale(container, order.id)
+    const t = ORDER_REFUNDED_I18N[locale] ?? ORDER_REFUNDED_I18N.nl
     const replyTo = process.env.SUPPORT_EMAIL || process.env.CONTACT_EMAIL
     const currency = (order.currency_code ?? 'EUR').toUpperCase()
     const refundText = `${refundAmount.toFixed(2)} ${currency}`
 
     const textBody =
-      `Uw terugstorting is verwerkt\n` +
-      `Ordernummer #${order.display_id}\n\n` +
-      `Beste ${order.shipping_address.first_name} ${order.shipping_address.last_name},\n\n` +
-      `We bevestigen dat de terugstorting voor uw bestelling is verwerkt. ` +
-      `Het bedrag staat over enkele werkdagen op uw rekening, afhankelijk van ` +
-      `uw bank of kaartuitgever.\n\n` +
-      `Teruggestort bedrag: ${refundText}\n` +
-      (reason ? `Reden: ${reason}\n` : '') +
+      `${t.heading}\n` +
+      `${t.orderNumber} #${order.display_id}\n\n` +
+      `${t.greeting} ${order.shipping_address.first_name} ${order.shipping_address.last_name},\n\n` +
+      `${t.body}\n\n` +
+      `${t.refundedAmount}: ${refundText}\n` +
+      (reason ? `${t.reason} ${reason}\n` : '') +
       `\n` +
-      `De terugstorting wordt naar dezelfde betaalmethode gestuurd waarmee u ` +
-      `oorspronkelijk heeft betaald. De verwerkingstijd is doorgaans 5 tot 10 ` +
-      `werkdagen. Heeft u na 10 werkdagen nog niets ontvangen, neem dan contact ` +
-      `met ons op.`
+      `${t.methodNote}\n` +
+      `${t.contactNote}`
 
     await notificationModuleService.createNotifications({
       to: order.email,
@@ -110,7 +110,7 @@ export default async function orderRefundedHandler({
       data: {
         emailOptions: {
           ...(replyTo ? { replyTo } : {}),
-          subject: `Terugstorting verwerkt | Inovix ${order.display_id}`,
+          subject: t.subject(order.display_id),
           text: textBody,
         },
         order: {
@@ -123,7 +123,8 @@ export default async function orderRefundedHandler({
         refundAmount,
         refundedAt,
         reason,
-        preview: 'Uw terugstorting is verwerkt',
+        locale,
+        preview: t.preview,
       },
     })
   } catch (error) {

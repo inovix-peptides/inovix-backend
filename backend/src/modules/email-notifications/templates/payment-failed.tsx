@@ -1,6 +1,8 @@
 import { Text, Section, Hr, Button } from '@react-email/components'
 import * as React from 'react'
 import { Base } from './base'
+import type { EmailLocale } from '../../../lib/email-locale'
+import { PAYMENT_FAILED_I18N } from './email-i18n'
 
 export const PAYMENT_FAILED = 'payment-failed'
 
@@ -9,6 +11,7 @@ export interface PaymentFailedProps {
   amountFormatted: string
   currency: string
   retryUrl: string
+  locale?: EmailLocale
   preview?: string
 }
 
@@ -24,43 +27,43 @@ export const PaymentFailedTemplate: React.FC<PaymentFailedProps> & {
   amountFormatted,
   currency,
   retryUrl,
-  preview = 'Uw betaling is niet gelukt, probeer opnieuw',
+  locale = 'nl',
+  preview,
 }) => {
-  const greetingName = customerName?.trim() || 'daar'
+  const t = PAYMENT_FAILED_I18N[locale] ?? PAYMENT_FAILED_I18N.nl
+  const greetingName = customerName?.trim() || t.greetingFallback
 
   return (
-    <Base preview={preview}>
+    <Base preview={preview ?? t.preview} locale={locale}>
       <Section className="mt-[24px] text-center">
         <Text className="text-black text-[18px] font-semibold leading-[28px] m-0">
-          Betaling mislukt
+          {t.heading}
         </Text>
         <Text className="text-[#666666] text-[12px] leading-[20px] mt-[4px] mb-0">
-          Het bedrag is niet afgeschreven van uw rekening.
+          {t.subheading}
         </Text>
       </Section>
 
       <Section className="mt-[24px]">
         <Text className="text-black text-[14px] leading-[22px] m-0">
-          Beste {greetingName},
+          {t.greeting} {greetingName},
         </Text>
         <Text className="text-black text-[14px] leading-[22px] mt-[12px]">
-          Uw betaling van <strong>{amountFormatted} {currency.toUpperCase()}</strong> kon
-          niet worden verwerkt. Dit kan verschillende oorzaken hebben, zoals
-          onvoldoende saldo, een geblokkeerde kaart of een afgebroken 3D Secure
-          verificatie.
+          {t.bodyPre}
+          <strong>{amountFormatted} {currency.toUpperCase()}</strong>
+          {t.bodyPost}
         </Text>
         <Text className="text-black text-[14px] leading-[22px] mt-[12px]">
-          Uw winkelwagen staat nog voor u klaar. U kunt de betaling opnieuw
-          proberen via de knop hieronder.
+          {t.cartReady}
         </Text>
       </Section>
 
       <Section className="mt-[24px] text-center">
         <Button
           href={retryUrl}
-          className="bg-black text-white text-[14px] font-semibold no-underline rounded px-[20px] py-[12px]"
+          className="bg-black text-white text-[14px] font-semibold no-underline px-[20px] py-[12px]"
         >
-          Opnieuw proberen
+          {t.retryButton}
         </Button>
       </Section>
 
@@ -68,7 +71,7 @@ export const PaymentFailedTemplate: React.FC<PaymentFailedProps> & {
 
       <Section>
         <Text className="text-[#666666] text-[12px] leading-[20px] m-0">
-          Lukt het niet? Reageer op deze e-mail, dan zoeken wij het voor u uit.
+          {t.helpLine}
         </Text>
       </Section>
     </Base>

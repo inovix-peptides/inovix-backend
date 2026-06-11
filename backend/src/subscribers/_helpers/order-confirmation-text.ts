@@ -1,3 +1,6 @@
+import type { EmailLocale } from '../../lib/email-locale'
+import { ORDER_PLACED_TEXT_I18N } from '../../modules/email-notifications/templates/email-i18n'
+
 type Addressish = {
   first_name?: string | null
   last_name?: string | null
@@ -23,7 +26,12 @@ type Orderish = {
   summary?: { raw_current_order_total?: { value?: number | string | null } | null } | null
 }
 
-export function buildOrderConfirmationText(order: Orderish, addr: Addressish): string {
+export function buildOrderConfirmationText(
+  order: Orderish,
+  addr: Addressish,
+  locale: EmailLocale = 'nl'
+): string {
+  const t = ORDER_PLACED_TEXT_I18N[locale] ?? ORDER_PLACED_TEXT_I18N.nl
   const currency = (order.currency_code ?? 'EUR').toUpperCase()
   const itemsText = (order.items ?? [])
     .map((item) => {
@@ -45,16 +53,13 @@ export function buildOrderConfirmationText(order: Orderish, addr: Addressish): s
     .join('\n')
 
   return (
-    `Bedankt voor uw bestelling bij Inovix\n` +
-    `Ordernummer #${order.display_id}\n\n` +
-    `Beste ${addr.first_name ?? ''} ${addr.last_name ?? ''},\n\n` +
-    `Uw betaling is verwerkt en de bestelling is bevestigd. Zodra uw bestelling ` +
-    `verzonden is, ontvangt u een aparte e-mail met de trackinggegevens.\n\n` +
-    `Uw bestelling:\n${itemsText}\n\n` +
-    (totalText ? `Totaal: ${totalText} (incl. btw en verzendkosten)\n\n` : '') +
-    `Verzendadres:\n${addrLines}\n\n` +
-    `Uitsluitend voor onderzoeksdoeleinden. Producten van Inovix zijn bedoeld voor ` +
-    `in-vitro laboratorium onderzoek en niet geschikt voor menselijke of dierlijke ` +
-    `consumptie, medische of cosmetische toepassingen.`
+    `${t.title}\n` +
+    `${t.orderNumber} #${order.display_id}\n\n` +
+    `${t.greeting} ${addr.first_name ?? ''} ${addr.last_name ?? ''},\n\n` +
+    `${t.body}\n\n` +
+    `${t.yourOrder}\n${itemsText}\n\n` +
+    (totalText ? `${t.total}: ${totalText} (${t.inclVat})\n\n` : '') +
+    `${t.shippingAddress}\n${addrLines}\n\n` +
+    t.disclaimer
   )
 }

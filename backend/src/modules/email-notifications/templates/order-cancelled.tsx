@@ -2,6 +2,8 @@ import { Text, Section, Hr, Row, Column } from '@react-email/components'
 import * as React from 'react'
 import { Base } from './base'
 import { OrderDTO, OrderAddressDTO } from '@medusajs/framework/types'
+import type { EmailLocale } from '../../../lib/email-locale'
+import { formatEmailDate, formatEmailMoney, ORDER_CANCELLED_I18N } from './email-i18n'
 
 export const ORDER_CANCELLED = 'order-cancelled'
 
@@ -19,6 +21,7 @@ export interface OrderCancelledTemplateProps {
     summary: { raw_current_order_total: { value: number } }
   }
   shippingAddress: OrderAddressDTO
+  locale?: EmailLocale
   preview?: string
 }
 
@@ -27,67 +30,31 @@ export const isOrderCancelledTemplateData = (
 ): data is OrderCancelledTemplateProps =>
   typeof data.order === 'object' && typeof data.shippingAddress === 'object'
 
-const CURRENCY_LOCALE_BY_CODE: Record<string, string> = {
-  eur: 'nl-NL',
-  usd: 'en-US',
-  gbp: 'en-GB',
-}
-
-function formatMoney(value: number | string | undefined, currencyCode: string) {
-  const numeric = typeof value === 'string' ? Number(value) : (value ?? 0)
-  const locale = CURRENCY_LOCALE_BY_CODE[currencyCode?.toLowerCase()] ?? 'nl-NL'
-  try {
-    return new Intl.NumberFormat(locale, {
-      style: 'currency',
-      currency: currencyCode?.toUpperCase() || 'EUR',
-    }).format(numeric)
-  } catch {
-    return `${numeric.toFixed(2)} ${currencyCode?.toUpperCase() ?? ''}`.trim()
-  }
-}
-
-function formatDateNL(date: string | Date) {
-  try {
-    return new Intl.DateTimeFormat('nl-NL', {
-      day: 'numeric',
-      month: 'long',
-      year: 'numeric',
-    }).format(new Date(date))
-  } catch {
-    return String(date)
-  }
-}
-
 export const OrderCancelledTemplate: React.FC<OrderCancelledTemplateProps> & {
   PreviewProps: OrderCancelledPreviewProps
-} = ({
-  order,
-  shippingAddress,
-  preview = 'Uw bestelling is geannuleerd',
-}) => {
+} = ({ order, shippingAddress, locale = 'nl', preview }) => {
+  const t = ORDER_CANCELLED_I18N[locale] ?? ORDER_CANCELLED_I18N.nl
   const currency = order.currency_code
   const refundTotal = order.summary?.raw_current_order_total?.value
   const cancelledAt = order.canceled_at ?? order.updated_at ?? order.created_at
 
   return (
-    <Base preview={preview}>
+    <Base preview={preview ?? t.preview} locale={locale}>
       <Section className="mt-[24px] text-center">
         <Text className="text-black text-[18px] font-semibold leading-[28px] m-0">
-          Uw bestelling is geannuleerd
+          {t.heading}
         </Text>
         <Text className="text-[#666666] text-[12px] leading-[20px] mt-[4px] mb-0">
-          Ordernummer #{order.display_id} | {formatDateNL(cancelledAt)}
+          {t.orderNumber} #{order.display_id} | {formatEmailDate(cancelledAt, locale)}
         </Text>
       </Section>
 
       <Section className="mt-[24px]">
         <Text className="text-black text-[14px] leading-[22px] m-0">
-          Beste {shippingAddress.first_name} {shippingAddress.last_name},
+          {t.greeting} {shippingAddress.first_name} {shippingAddress.last_name},
         </Text>
         <Text className="text-black text-[14px] leading-[22px] mt-[12px]">
-          We bevestigen dat uw bestelling #{order.display_id} is geannuleerd.
-          Het volledige bedrag wordt teruggestort naar de oorspronkelijke
-          betaalmethode.
+          {t.body(order.display_id)}
         </Text>
       </Section>
 
@@ -95,7 +62,7 @@ export const OrderCancelledTemplate: React.FC<OrderCancelledTemplateProps> & {
 
       <Section>
         <Text className="text-black text-[13px] font-semibold uppercase tracking-wide m-0 mb-[8px]">
-          Geannuleerde artikelen
+          {t.cancelledItems}
         </Text>
         {order.items?.map((item) => (
           <Row key={item.id} className="mb-[8px]">
@@ -111,7 +78,7 @@ export const OrderCancelledTemplate: React.FC<OrderCancelledTemplateProps> & {
               align="right"
               width="90"
             >
-              {formatMoney((item as any).unit_price * item.quantity, currency)}
+              {formatEmailMoney((item as any).unit_price * item.quantity, currency, locale)}
             </Column>
           </Row>
         ))}
@@ -122,18 +89,18 @@ export const OrderCancelledTemplate: React.FC<OrderCancelledTemplateProps> & {
       <Section>
         <Row>
           <Column className="text-black text-[14px] font-semibold" align="left">
-            Terug te storten bedrag
+            {t.refundAmount}
           </Column>
           <Column
             className="text-black text-[14px] font-semibold whitespace-nowrap"
             align="right"
             width="90"
           >
-            {formatMoney(refundTotal, currency)}
+            {formatEmailMoney(refundTotal, currency, locale)}
           </Column>
         </Row>
         <Text className="text-[#666666] text-[11px] leading-[16px] mt-[4px] mb-0">
-          Inclusief btw en verzendkosten.
+          {t.inclVat}
         </Text>
       </Section>
 
@@ -141,17 +108,13 @@ export const OrderCancelledTemplate: React.FC<OrderCancelledTemplateProps> & {
 
       <Section>
         <Text className="text-black text-[13px] font-semibold uppercase tracking-wide m-0 mb-[8px]">
-          Wanneer ontvangt u uw geld terug?
+          {t.whenHeading}
         </Text>
         <Text className="text-black text-[13px] leading-[20px] m-0">
-          De terugstorting wordt direct in gang gezet. Afhankelijk van uw bank
-          of kaartuitgever kan het 5 tot 10 werkdagen duren voordat het bedrag
-          op uw rekening zichtbaar is.
+          {t.whenBody1}
         </Text>
         <Text className="text-black text-[13px] leading-[20px] mt-[12px]">
-          U ontvangt een aparte bevestiging zodra de terugstorting is verwerkt.
-          Als u na 10 werkdagen niets heeft ontvangen, neem dan contact met ons
-          op zodat we het samen kunnen nakijken.
+          {t.whenBody2}
         </Text>
       </Section>
     </Base>

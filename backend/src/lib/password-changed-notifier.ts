@@ -10,10 +10,18 @@ import type {
 import { Modules } from "@medusajs/framework/utils"
 import { EmailTemplates } from "../modules/email-notifications/templates"
 import { Sentry } from "./instrument"
+import {
+  resolveCustomerEmailLocaleByEmail,
+  type EmailLocale,
+} from "./email-locale"
+import {
+  EMAIL_DATE_LOCALE,
+  PASSWORD_CHANGED_I18N,
+} from "../modules/email-notifications/templates/email-i18n"
 
-function formatDateNL(date: Date): string {
+function formatDateTime(date: Date, locale: EmailLocale): string {
   try {
-    return new Intl.DateTimeFormat("nl-NL", {
+    return new Intl.DateTimeFormat(EMAIL_DATE_LOCALE[locale] ?? "nl-NL", {
       day: "numeric",
       month: "long",
       year: "numeric",
@@ -70,22 +78,26 @@ export function passwordChangedNotifier() {
       const supportEmail =
         process.env.SUPPORT_EMAIL || process.env.CONTACT_EMAIL || undefined
       const isCustomer = actorType === "customer"
-      const changedAt = isCustomer ? formatDateNL(now) : formatDateEN(now)
-      const subject = isCustomer
-        ? "Uw Inovix-wachtwoord is gewijzigd"
-        : "Your Inovix admin password was changed"
-      const textBody = isCustomer
-        ? `Uw Inovix-wachtwoord is zojuist gewijzigd op ${changedAt}.\n\n` +
-          `Was u dit niet? Neem direct contact met ons op${
-            supportEmail ? ` via ${supportEmail}` : ""
-          } en wijzig uw wachtwoord zo snel mogelijk.`
-        : `Your Inovix admin password was just changed at ${changedAt}.\n\n` +
-          `Was this not you? Contact us immediately${
-            supportEmail ? ` at ${supportEmail}` : ""
-          } and change your password right away.`
 
       ;(async () => {
         try {
+          const locale: EmailLocale = isCustomer
+            ? await resolveCustomerEmailLocaleByEmail(req.scope, recipient)
+            : "nl"
+          const t = PASSWORD_CHANGED_I18N[locale] ?? PASSWORD_CHANGED_I18N.nl
+          const changedAt = isCustomer
+            ? formatDateTime(now, locale)
+            : formatDateEN(now)
+          const subject = isCustomer
+            ? t.subject
+            : "Your Inovix admin password was changed"
+          const textBody = isCustomer
+            ? `${t.intro(changedAt)}\n\n${t.warning(supportEmail)}`
+            : `Your Inovix admin password was just changed at ${changedAt}.\n\n` +
+              `Was this not you? Contact us immediately${
+                supportEmail ? ` at ${supportEmail}` : ""
+              } and change your password right away.`
+
           const notificationModuleService: INotificationModuleService =
             req.scope.resolve(Modules.NOTIFICATION)
           await notificationModuleService.createNotifications({
@@ -100,6 +112,7 @@ export function passwordChangedNotifier() {
               },
               actorType,
               changedAt,
+              locale,
               ...(supportEmail ? { supportEmail } : {}),
             },
           })

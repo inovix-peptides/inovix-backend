@@ -1,6 +1,8 @@
 import { Text, Section, Hr, Button } from '@react-email/components'
 import * as React from 'react'
 import { Base } from './base'
+import type { EmailLocale } from '../../../lib/email-locale'
+import { CUSTOMER_WELCOME_I18N } from './email-i18n'
 
 export const CUSTOMER_WELCOME = 'customer-welcome'
 
@@ -8,6 +10,7 @@ export interface CustomerWelcomeTemplateProps {
   firstName?: string | null
   email: string
   storefrontUrl: string
+  locale?: EmailLocale
   preview?: string
 }
 
@@ -18,32 +21,26 @@ export const isCustomerWelcomeData = (
 
 export const CustomerWelcomeTemplate: React.FC<CustomerWelcomeTemplateProps> & {
   PreviewProps: CustomerWelcomeTemplateProps
-} = ({
-  firstName,
-  email,
-  storefrontUrl,
-  preview = 'Welkom bij Inovix',
-}) => {
+} = ({ firstName, email, storefrontUrl, locale = 'nl', preview }) => {
+  const t = CUSTOMER_WELCOME_I18N[locale] ?? CUSTOMER_WELCOME_I18N.nl
   const greetingName = firstName?.trim() || email
   const accountUrl = `${storefrontUrl}/account`
   const productsUrl = `${storefrontUrl}/products`
 
   return (
-    <Base preview={preview}>
+    <Base preview={preview ?? t.preview} locale={locale}>
       <Section className="mt-[24px] text-center">
         <Text className="text-black text-[18px] font-semibold leading-[28px] m-0">
-          Welkom bij Inovix
+          {t.heading}
         </Text>
       </Section>
 
       <Section className="mt-[24px]">
         <Text className="text-black text-[14px] leading-[22px] m-0">
-          Beste {greetingName},
+          {t.greeting} {greetingName},
         </Text>
         <Text className="text-black text-[14px] leading-[22px] mt-[12px]">
-          Bedankt voor het aanmaken van uw account bij Inovix. U heeft nu
-          toegang tot ons volledige assortiment onderzoeksproducten, kunt
-          eerdere bestellingen inzien en verzendgegevens beheren.
+          {t.body}
         </Text>
       </Section>
 
@@ -51,30 +48,28 @@ export const CustomerWelcomeTemplate: React.FC<CustomerWelcomeTemplateProps> & {
 
       <Section>
         <Text className="text-black text-[13px] font-semibold uppercase tracking-wide m-0 mb-[8px]">
-          Hoe te bestellen
+          {t.howToOrder}
         </Text>
         <Text className="text-black text-[13px] leading-[20px] m-0">
-          1. Bekijk ons assortiment en kies de gewenste peptiden.
+          {t.step1}
         </Text>
         <Text className="text-black text-[13px] leading-[20px] m-0">
-          2. Voeg producten toe aan uw winkelwagen en ga naar checkout.
+          {t.step2}
         </Text>
         <Text className="text-black text-[13px] leading-[20px] m-0">
-          3. Bevestig dat de bestelling uitsluitend voor onderzoek is en
-          rond de betaling af.
+          {t.step3}
         </Text>
         <Text className="text-black text-[13px] leading-[20px] mt-[8px]">
-          Wij verzenden GMP gecertificeerde, HPLC getoetste peptiden door de
-          gehele EU. Standaard met tracking en discrete verpakking.
+          {t.shippingNote}
         </Text>
       </Section>
 
       <Section className="mt-[24px] text-center">
         <Button
           href={productsUrl}
-          className="bg-black text-white rounded text-[13px] font-semibold no-underline px-[20px] py-[12px]"
+          className="bg-black text-white text-[13px] font-semibold no-underline px-[20px] py-[12px]"
         >
-          Bekijk assortiment
+          {t.browseButton}
         </Button>
       </Section>
 
@@ -82,11 +77,11 @@ export const CustomerWelcomeTemplate: React.FC<CustomerWelcomeTemplateProps> & {
 
       <Section>
         <Text className="text-[#666666] text-[12px] leading-[18px] m-0">
-          Uw account beheert u via{' '}
+          {t.accountNotePre}
           <a href={accountUrl} className="text-[#666666] underline">
             {accountUrl.replace(/^https?:\/\//, '')}
           </a>
-          . Hier vindt u uw orderhistorie, adressen en accountgegevens.
+          {t.accountNotePost}
         </Text>
       </Section>
     </Base>

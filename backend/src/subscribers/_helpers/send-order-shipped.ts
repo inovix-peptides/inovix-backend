@@ -4,6 +4,8 @@ import {
   Logger,
 } from '@medusajs/framework/types'
 import { EmailTemplates } from '../../modules/email-notifications/templates'
+import { resolveOrderEmailLocale } from '../../lib/email-locale'
+import { ORDER_SHIPPED_I18N } from '../../modules/email-notifications/templates/email-i18n'
 
 export async function sendOrderShippedNotification(
   container: any,
@@ -124,6 +126,8 @@ export async function sendOrderShippedNotification(
     })
   )
 
+  const locale = await resolveOrderEmailLocale(container, order.id)
+  const t = ORDER_SHIPPED_I18N[locale]
   const replyTo = process.env.SUPPORT_EMAIL || process.env.CONTACT_EMAIL
 
   await notificationModuleService.createNotifications({
@@ -134,7 +138,7 @@ export async function sendOrderShippedNotification(
     data: {
       emailOptions: {
         ...(replyTo ? { replyTo } : {}),
-        subject: `Uw bestelling is onderweg | Inovix ${order.display_id}`,
+        subject: t.subject(order.display_id),
       },
       order: {
         id: order.id,
@@ -146,7 +150,8 @@ export async function sendOrderShippedNotification(
       labels,
       items: shipmentItems,
       shippedAt: fulfillment.shipped_at ?? null,
-      preview: 'Uw bestelling is onderweg',
+      locale,
+      preview: t.preview,
     },
   })
 

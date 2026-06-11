@@ -3,6 +3,8 @@ import { INotificationModuleService, Logger } from '@medusajs/framework/types'
 import { SubscriberArgs, SubscriberConfig } from '@medusajs/medusa'
 import { EmailTemplates } from '../modules/email-notifications/templates'
 import { Sentry } from '../lib/instrument'
+import { normalizeEmailLocale, type EmailLocale } from '../lib/email-locale'
+import { PAYMENT_FAILED_I18N } from '../modules/email-notifications/templates/email-i18n'
 
 type PaymentFailedData = {
   session_id?: string | null
@@ -49,6 +51,7 @@ export default async function paymentFailedHandler({
   let recipientEmail = data.customer_email ?? null
   let customerName = data.customer_name ?? null
   let cartId: string | null = null
+  let locale: EmailLocale = 'nl'
 
   try {
     // Fall back to the cart linked to the payment session when the webhook
@@ -60,6 +63,7 @@ export default async function paymentFailedHandler({
         fields: [
           'id',
           'email',
+          'metadata',
           'shipping_address.first_name',
           'shipping_address.last_name',
         ],
@@ -67,6 +71,7 @@ export default async function paymentFailedHandler({
       const cart = carts?.[0]
       if (cart) {
         cartId = cart.id ?? null
+        locale = normalizeEmailLocale((cart.metadata as Record<string, unknown> | null)?.locale)
         if (!recipientEmail) recipientEmail = cart.email ?? null
         if (!customerName && cart.shipping_address) {
           const first = cart.shipping_address.first_name ?? ''
@@ -89,13 +94,12 @@ export default async function paymentFailedHandler({
     const replyTo = process.env.SUPPORT_EMAIL || process.env.CONTACT_EMAIL
     const idempotencyBase = transactionId || sessionId || `${recipientEmail}-${Date.now()}`
 
-    const textBody =
-      `Betaling mislukt\n\n` +
-      `Beste ${customerName || 'daar'},\n\n` +
-      `Uw betaling van ${amountFormatted} ${currency.toUpperCase()} kon niet worden verwerkt. ` +
-      `Dit kan onvoldoende saldo, een geblokkeerde kaart of afgebroken 3D Secure zijn.\n\n` +
-      `Uw winkelwagen staat nog voor u klaar. Probeer opnieuw via:\n${retryUrl}\n\n` +
-      `Lukt het niet? Reageer op deze e-mail dan zoeken wij het voor u uit.`
+    const t = PAYMENT_FAILED_I18N[locale]
+    const textBody = t.textBody(
+      customerName || t.greetingFallback,
+      `${amountFormatted} ${currency.toUpperCase()}`,
+      retryUrl
+    )
 
     await notificationModuleService.createNotifications({
       to: recipientEmail,
@@ -108,14 +112,15 @@ export default async function paymentFailedHandler({
       data: {
         emailOptions: {
           ...(replyTo ? { replyTo } : {}),
-          subject: `Betaling mislukt | Inovix`,
+          subject: t.subject,
           text: textBody,
         },
         customerName,
         amountFormatted,
         currency,
         retryUrl,
-        preview: 'Uw betaling is niet gelukt, probeer opnieuw',
+        locale,
+        preview: t.preview,
       },
     })
   } catch (error) {

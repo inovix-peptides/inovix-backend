@@ -7,6 +7,8 @@ import {
 import { SubscriberArgs, SubscriberConfig } from '@medusajs/medusa'
 import { EmailTemplates } from '../modules/email-notifications/templates'
 import { Sentry } from '../lib/instrument'
+import { resolveOrderEmailLocale } from '../lib/email-locale'
+import { ORDER_CANCELLED_I18N } from '../modules/email-notifications/templates/email-i18n'
 
 export default async function orderCancelledHandler({
   event: { data },
@@ -37,6 +39,8 @@ export default async function orderCancelledHandler({
       return
     }
 
+    const locale = await resolveOrderEmailLocale(container, order.id)
+    const t = ORDER_CANCELLED_I18N[locale] ?? ORDER_CANCELLED_I18N.nl
     const replyTo = process.env.SUPPORT_EMAIL || process.env.CONTACT_EMAIL
     const addr = order.shipping_address
     const currency = (order.currency_code ?? 'EUR').toUpperCase()
@@ -52,20 +56,17 @@ export default async function orderCancelledHandler({
       refundValue != null ? `${Number(refundValue).toFixed(2)} ${currency}` : ''
 
     const textBody =
-      `Uw bestelling is geannuleerd\n` +
-      `Ordernummer #${order.display_id}\n\n` +
-      `Beste ${addr.first_name} ${addr.last_name},\n\n` +
-      `We bevestigen dat uw bestelling #${order.display_id} is geannuleerd. ` +
-      `Het volledige bedrag wordt teruggestort naar de oorspronkelijke betaalmethode.\n\n` +
-      `Geannuleerde artikelen:\n${itemsText}\n\n` +
+      `${t.heading}\n` +
+      `${t.orderNumber} #${order.display_id}\n\n` +
+      `${t.greeting} ${addr.first_name} ${addr.last_name},\n\n` +
+      `${t.body(order.display_id)}\n\n` +
+      `${t.cancelledItems}:\n${itemsText}\n\n` +
       (refundText
-        ? `Terug te storten bedrag: ${refundText} (incl. btw en verzendkosten)\n\n`
+        ? `${t.refundAmount}: ${refundText} (${t.inclVat})\n\n`
         : '') +
-      `Wanneer ontvangt u uw geld terug?\n` +
-      `De terugstorting wordt direct in gang gezet. Afhankelijk van uw bank ` +
-      `of kaartuitgever kan het 5 tot 10 werkdagen duren voordat het bedrag op ` +
-      `uw rekening zichtbaar is. Heeft u na 10 werkdagen nog niets ontvangen, ` +
-      `neem dan contact met ons op.`
+      `${t.whenHeading}\n` +
+      `${t.whenBody1}\n` +
+      `${t.whenBody2}`
 
     await notificationModuleService.createNotifications({
       to: order.email,
@@ -74,12 +75,13 @@ export default async function orderCancelledHandler({
       data: {
         emailOptions: {
           ...(replyTo ? { replyTo } : {}),
-          subject: `Bestelling geannuleerd | Inovix ${order.display_id}`,
+          subject: t.subject(order.display_id),
           text: textBody,
         },
         order,
         shippingAddress: order.shipping_address,
-        preview: 'Uw bestelling is geannuleerd',
+        locale,
+        preview: t.preview,
       },
     })
   } catch (error) {

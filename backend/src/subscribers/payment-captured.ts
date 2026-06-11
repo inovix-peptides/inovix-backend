@@ -4,6 +4,8 @@ import { SubscriberArgs, SubscriberConfig } from '@medusajs/medusa'
 import { EmailTemplates } from '../modules/email-notifications/templates'
 import { Sentry } from '../lib/instrument'
 import { buildOrderConfirmationText } from './_helpers/order-confirmation-text'
+import { resolveOrderEmailLocale } from '../lib/email-locale'
+import { ORDER_PLACED_I18N } from '../modules/email-notifications/templates/email-i18n'
 
 export default async function paymentCapturedHandler({
   event: { data },
@@ -52,8 +54,10 @@ export default async function paymentCapturedHandler({
       return
     }
 
+    const locale = await resolveOrderEmailLocale(container, order.id)
+    const t = ORDER_PLACED_I18N[locale]
     const replyTo = process.env.SUPPORT_EMAIL || process.env.CONTACT_EMAIL
-    const textBody = buildOrderConfirmationText(order, order.shipping_address)
+    const textBody = buildOrderConfirmationText(order, order.shipping_address, locale)
 
     await notificationModuleService.createNotifications({
       to: order.email,
@@ -66,12 +70,13 @@ export default async function paymentCapturedHandler({
       data: {
         emailOptions: {
           ...(replyTo ? { replyTo } : {}),
-          subject: `Bestelling bevestigd | Inovix ${order.display_id}`,
+          subject: t.subject(order.display_id),
           text: textBody,
         },
         order,
         shippingAddress: order.shipping_address,
-        preview: 'Uw betaling is verwerkt | bestelling bevestigd',
+        locale,
+        preview: t.preview,
       },
     })
   } catch (error) {

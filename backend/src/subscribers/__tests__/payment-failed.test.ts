@@ -96,6 +96,44 @@ describe('payment-failed subscriber', () => {
       )
     })
 
+    it('sends the email in German when the cart was stamped with locale de', async () => {
+      mockQuery.graph.mockResolvedValueOnce({
+        data: [
+          {
+            id: 'cart_de',
+            email: 'kunde@example.de',
+            metadata: { locale: 'de' },
+            shipping_address: { first_name: 'Hans', last_name: 'Müller' },
+          },
+        ],
+      })
+
+      await paymentFailedHandler({
+        event: {
+          data: {
+            session_id: 'payses_de',
+            transaction_id: 'tx_de',
+            amount: 99.5,
+            currency_code: 'EUR',
+          },
+        },
+        container: mockContainer,
+      } as any)
+
+      expect(mockNotificationService.createNotifications).toHaveBeenCalledWith(
+        expect.objectContaining({
+          to: 'kunde@example.de',
+          data: expect.objectContaining({
+            locale: 'de',
+            emailOptions: expect.objectContaining({
+              subject: 'Zahlung fehlgeschlagen | Inovix',
+              text: expect.stringContaining('Sehr geehrte/r Hans Müller'),
+            }),
+          }),
+        })
+      )
+    })
+
     it('falls back to the cart email and shipping name when payload lacks them', async () => {
       mockQuery.graph.mockResolvedValueOnce({
         data: [
