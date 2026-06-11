@@ -196,12 +196,28 @@ describe('MinioFileProviderService', () => {
       client.putObject.mockRejectedValueOnce(new Error('Storage full'))
 
       const file = {
+        filename: 'file.png',
+        mimeType: 'image/png',
+        content: Buffer.from('data'),
+      }
+
+      await expect(service.upload(file as any)).rejects.toThrow('Failed to upload file: Storage full')
+    })
+
+    it('rejects a disallowed mime type before touching storage', async () => {
+      const service = createService()
+      const client = getClientMock()
+
+      const file = {
         filename: 'file.txt',
         mimeType: 'text/plain',
         content: Buffer.from('data'),
       }
 
-      await expect(service.upload(file as any)).rejects.toThrow('Failed to upload file: Storage full')
+      await expect(service.upload(file as any)).rejects.toThrow(
+        /Unsupported file type/
+      )
+      expect(client.putObject).not.toHaveBeenCalled()
     })
   })
 

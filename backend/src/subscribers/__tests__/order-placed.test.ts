@@ -10,6 +10,9 @@ jest.mock('@medusajs/framework/utils', () => ({
     NOTIFICATION: 'notificationModuleService',
     ORDER: 'orderModuleService',
   },
+  ContainerRegistrationKeys: {
+    QUERY: 'query',
+  },
 }))
 
 import orderPlacedHandler, { config } from '../order-placed'
@@ -48,6 +51,16 @@ describe('order-placed subscriber', () => {
     retrieveOrder: jest.fn().mockResolvedValue(mockOrder),
   }
 
+  // The subscriber reads payment state from query.graph (the linked payment
+  // collection), not order.payment_status. Default to a captured collection so
+  // the happy-path tests send the confirmation.
+  const paidGraphResult = {
+    data: [{ id: 'order_abc', payment_collections: [{ status: 'completed', captured_amount: 49.99 }] }],
+  }
+  const mockQuery = {
+    graph: jest.fn().mockResolvedValue(paidGraphResult),
+  }
+
   const mockLogger = {
     error: jest.fn(),
     warn: jest.fn(),
@@ -58,6 +71,7 @@ describe('order-placed subscriber', () => {
     resolve: jest.fn((key: string) => {
       if (key === 'notificationModuleService') return mockNotificationService
       if (key === 'orderModuleService') return mockOrderService
+      if (key === 'query') return mockQuery
       if (key === 'logger') return mockLogger
       return undefined
     }),
@@ -66,6 +80,7 @@ describe('order-placed subscriber', () => {
   beforeEach(() => {
     jest.clearAllMocks()
     mockOrderService.retrieveOrder.mockResolvedValue(mockOrder)
+    mockQuery.graph.mockResolvedValue(paidGraphResult)
   })
 
   describe('config', () => {
@@ -113,10 +128,9 @@ describe('order-placed subscriber', () => {
       )
     })
 
-    it('defers to payment.captured when payment_status is not captured', async () => {
-      mockOrderService.retrieveOrder.mockResolvedValueOnce({
-        ...mockOrder,
-        payment_status: 'authorized',
+    it('defers to payment.captured when the payment collection is not yet paid', async () => {
+      mockQuery.graph.mockResolvedValueOnce({
+        data: [{ id: 'order_abc', payment_collections: [{ status: 'awaiting', captured_amount: 0 }] }],
       })
 
       await orderPlacedHandler({
