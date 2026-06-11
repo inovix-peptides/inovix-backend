@@ -37,19 +37,22 @@ export default async function productTranslateHandler({
 
     if (metadata.i18n_locked === true) return
 
+    const metaStr = (key: string) =>
+      typeof metadata[key] === 'string' ? (metadata[key] as string) : null
+
     const source: TranslatableFields = {
       description: product.description ?? null,
       subtitle: product.subtitle ?? null,
-      long_description:
-        typeof metadata.long_description === 'string' ? metadata.long_description : null,
-      category: typeof metadata.category === 'string' ? metadata.category : null,
+      long_description: metaStr('long_description'),
+      category: metaStr('category'),
+      physical_state: metaStr('physical_state'),
+      solubility: metaStr('solubility'),
+      shelf_life: metaStr('shelf_life'),
+      storage_temp: metaStr('storage_temp'),
+      handling_notes: metaStr('handling_notes'),
     }
 
-    const hasContent =
-      Boolean(source.description) ||
-      Boolean(source.subtitle) ||
-      Boolean(source.long_description) ||
-      Boolean(source.category)
+    const hasContent = Object.values(source).some(Boolean)
     if (!hasContent) return
 
     const hash = hashSource(source)
