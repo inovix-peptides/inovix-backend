@@ -1,5 +1,6 @@
 import { createStep, StepResponse } from "@medusajs/framework/workflows-sdk"
 import { MedusaError } from "@medusajs/framework/utils"
+import { evaluatePaymentGate } from "../../../admin/widgets/order-fulfillment-checklist.logic"
 
 // Registration key of the dhl-parcel-boxes module (exported as
 // DHL_PARCEL_BOXES_MODULE from src/modules/dhl-parcel-boxes). Referenced as a
@@ -20,6 +21,16 @@ export type ValidateOrderInput = {
     shipping_methods?: ShippingMethod[]
     items?: Array<{ quantity: number; product?: { id?: string; title?: string; weight?: number | null } }>
   }
+  // The order's broker payment (resolveBrokerPayment) | null when none exists.
+  payment?: {
+    amount?: unknown
+    captured_amount?: unknown
+    refunded_amount?: unknown
+    canceled_at?: string | Date | null
+  } | null
+  // True when the operator recorded an explicit, reasoned payment override in
+  // the fulfillment checklist. Skips ONLY the payment gate, nothing else.
+  paymentOverridden?: boolean
 }
 
 /**
@@ -54,6 +65,16 @@ const validateOrder = createStep(
         MedusaError.Types.NOT_ALLOWED,
         `Order is ${order.status}, geen DHL Parcel-label mogelijk`,
       )
+    }
+
+    if (!input.paymentOverridden) {
+      const gate = evaluatePaymentGate(input.payment ?? null)
+      if (!gate.ok) {
+        throw new MedusaError(
+          MedusaError.Types.NOT_ALLOWED,
+          `${gate.reason} | geen DHL-label mogelijk. Controleer de betaling op de bestelpagina of gebruik de override met reden.`
+        )
+      }
     }
 
     const items = order.items ?? []

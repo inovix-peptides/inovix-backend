@@ -10,12 +10,19 @@ export type CreateDhlParcelShipmentInput = {
   // Attempt number (1-based) used to seed a fresh DHL labelId on a redo after a
   // canceled label. Defaults to 1.
   labelAttempt?: number
+  // Broker payment + override flag for the payment gate in validate-order.
+  payment?: Record<string, unknown> | null
+  paymentOverridden?: boolean
 }
 
 export const createDhlParcelShipmentWorkflow = createWorkflow(
   "create-dhl-parcel-shipment",
   (input: CreateDhlParcelShipmentInput) => {
-    validateOrder({ order: input.order })
+    validateOrder({
+      order: input.order,
+      payment: input.payment,
+      paymentOverridden: input.paymentOverridden,
+    })
     const payload = buildPayload({ order: input.order })
     const fulfillment = callDhl({
       order_id: input.order.id,

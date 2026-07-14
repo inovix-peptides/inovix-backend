@@ -49,10 +49,12 @@ const baseOrder = {
 
 const presets = [{ id: "box_1", max_items: 10, parcel_type_key: "MEDIUM" }]
 
+const PAID_PAYMENT = { amount: 100, captured_amount: 100, refunded_amount: 0, canceled_at: null }
+
 describe("validate-order step (DHL Parcel)", () => {
   it("returns valid for a well-formed DHL Parcel order", async () => {
     const result = await validateOrder(
-      { order: baseOrder } as any,
+      { order: baseOrder, payment: PAID_PAYMENT } as any,
       { container: makeContainer(presets) } as any,
     )
     expect(result.output).toMatchObject({ valid: true })
@@ -61,7 +63,7 @@ describe("validate-order step (DHL Parcel)", () => {
   it("throws when the order status is 'canceled' (American spelling)", async () => {
     await expect(
       validateOrder(
-        { order: { ...baseOrder, status: "canceled" } } as any,
+        { order: { ...baseOrder, status: "canceled" }, payment: PAID_PAYMENT } as any,
         { container: makeContainer(presets) } as any,
       ),
     ).rejects.toThrow(/cancel/i)
@@ -70,7 +72,7 @@ describe("validate-order step (DHL Parcel)", () => {
   it("throws when the order status is 'cancelled' (British spelling)", async () => {
     await expect(
       validateOrder(
-        { order: { ...baseOrder, status: "cancelled" } } as any,
+        { order: { ...baseOrder, status: "cancelled" }, payment: PAID_PAYMENT } as any,
         { container: makeContainer(presets) } as any,
       ),
     ).rejects.toThrow(/cancel/i)
@@ -79,7 +81,7 @@ describe("validate-order step (DHL Parcel)", () => {
   it("throws when the order status is 'refunded'", async () => {
     await expect(
       validateOrder(
-        { order: { ...baseOrder, status: "refunded" } } as any,
+        { order: { ...baseOrder, status: "refunded" }, payment: PAID_PAYMENT } as any,
         { container: makeContainer(presets) } as any,
       ),
     ).rejects.toThrow(/refund/i)
@@ -88,7 +90,7 @@ describe("validate-order step (DHL Parcel)", () => {
   it("throws when the order has no items", async () => {
     await expect(
       validateOrder(
-        { order: { ...baseOrder, items: [] } } as any,
+        { order: { ...baseOrder, items: [] }, payment: PAID_PAYMENT } as any,
         { container: makeContainer(presets) } as any,
       ),
     ).rejects.toThrow(/no items|geen.*items|items/i)
@@ -103,7 +105,7 @@ describe("validate-order step (DHL Parcel)", () => {
     }
     await expect(
       validateOrder(
-        { order } as any,
+        { order, payment: PAID_PAYMENT } as any,
         { container: makeContainer(presets) } as any,
       ),
     ).rejects.toThrow(/DHL Parcel/i)
@@ -116,7 +118,7 @@ describe("validate-order step (DHL Parcel)", () => {
     }
     await expect(
       validateOrder(
-        { order } as any,
+        { order, payment: PAID_PAYMENT } as any,
         { container: makeContainer(presets) } as any,
       ),
     ).rejects.toThrow(/gewicht/i)
@@ -125,7 +127,7 @@ describe("validate-order step (DHL Parcel)", () => {
   it("throws when no box presets are configured", async () => {
     await expect(
       validateOrder(
-        { order: baseOrder } as any,
+        { order: baseOrder, payment: PAID_PAYMENT } as any,
         { container: makeContainer([]) } as any,
       ),
     ).rejects.toThrow(/box preset/i)
@@ -137,7 +139,50 @@ describe("validate-order step (DHL Parcel)", () => {
       shipping_methods: [{ data: { dhl_option: "PS", service_point_id: "sp-1" } }],
     }
     const result = await validateOrder(
-      { order } as any,
+      { order, payment: PAID_PAYMENT } as any,
+      { container: makeContainer(presets) } as any,
+    )
+    expect(result.output).toMatchObject({ valid: true })
+  })
+})
+
+describe("payment gate", () => {
+  it("throws NOT_ALLOWED when there is no payment", async () => {
+    await expect(
+      validateOrder(
+        { order: baseOrder, payment: null } as any,
+        { container: makeContainer(presets) } as any,
+      ),
+    ).rejects.toThrow(/Geen betaling gevonden/)
+  })
+
+  it("throws when the payment is not fully captured", async () => {
+    await expect(
+      validateOrder(
+        {
+          order: baseOrder,
+          payment: { amount: 100, captured_amount: 40, refunded_amount: 0, canceled_at: null },
+        } as any,
+        { container: makeContainer(presets) } as any,
+      ),
+    ).rejects.toThrow(/nog niet \(volledig\) ontvangen/)
+  })
+
+  it("throws when anything was refunded", async () => {
+    await expect(
+      validateOrder(
+        {
+          order: baseOrder,
+          payment: { amount: 100, captured_amount: 100, refunded_amount: 10, canceled_at: null },
+        } as any,
+        { container: makeContainer(presets) } as any,
+      ),
+    ).rejects.toThrow(/terugbetaald/)
+  })
+
+  it("passes when the gate fails but paymentOverridden is true", async () => {
+    const result = await validateOrder(
+      { order: baseOrder, payment: null, paymentOverridden: true } as any,
       { container: makeContainer(presets) } as any,
     )
     expect(result.output).toMatchObject({ valid: true })
