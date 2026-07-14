@@ -257,6 +257,11 @@ function OverridePrompt({
 }) {
   const [reason, setReason] = useState("")
   const tooShort = reason.trim().length < MIN_OVERRIDE_REASON
+
+  useEffect(() => {
+    if (!open) setReason("")
+  }, [open])
+
   return (
     <Prompt open={open} onOpenChange={onOpenChange}>
       <Prompt.Content>
@@ -772,6 +777,7 @@ const OrderFulfillmentChecklistWidget = ({
       </Prompt>
 
       <OverridePrompt
+        key={overrideStep ?? "closed"}
         open={overrideStep !== null}
         onOpenChange={(open) => !open && setOverrideStep(null)}
         title={
