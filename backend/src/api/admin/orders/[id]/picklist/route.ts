@@ -1,0 +1,78 @@
+import type { MedusaRequest, MedusaResponse } from "@medusajs/framework"
+import { ContainerRegistrationKeys } from "@medusajs/framework/utils"
+
+import { buildPicklistHtml, type PicklistView } from "./build-html"
+
+// GET /admin/orders/:id/picklist | printable A4 pick list. Behind the standard
+// admin session auth (all /admin routes are). Opened in a new tab by the
+// fulfillment checklist widget's "Print picklijst" button.
+//
+// query.graph field rules: trailing-star nested paths only, and NEVER
+// shipping_methods.shipping_option (unresolvable cross-module expansion, 500s).
+// The DHL option comes from shipping_methods.data, same as the dhl-label route.
+const ORDER_FIELDS = [
+  "id",
+  "display_id",
+  "created_at",
+  "email",
+  "shipping_address.*",
+  "items.id",
+  "items.quantity",
+  "items.title",
+  "items.product_title",
+  "items.variant_title",
+  "items.variant_sku",
+  "shipping_methods.id",
+  "shipping_methods.data",
+]
+
+export async function GET(req: MedusaRequest, res: MedusaResponse): Promise<void> {
+  const query = req.scope.resolve(ContainerRegistrationKeys.QUERY)
+  const { data } = await query.graph({
+    entity: "order",
+    filters: { id: req.params.id },
+    fields: ORDER_FIELDS,
+  })
+
+  const order = (data?.[0] ?? null) as any
+  if (!order) {
+    res.status(404).send("Bestelling niet gevonden")
+    return
+  }
+
+  const a = order.shipping_address ?? {}
+  const dhlData =
+    ((order.shipping_methods ?? []) as any[])
+      .map((m) => m.data ?? {})
+      .find((d) => typeof d.dhl_option === "string") ?? {}
+  const isPs = dhlData.dhl_option === "PS"
+
+  const view: PicklistView = {
+    display_id: order.display_id,
+    created_at: order.created_at ? String(order.created_at) : null,
+    customer_name: `${a.first_name ?? ""} ${a.last_name ?? ""}`.trim(),
+    email: order.email ?? "",
+    address_lines: [
+      a.company,
+      a.address_1,
+      a.address_2,
+      `${a.postal_code ?? ""} ${a.city ?? ""}`.trim(),
+      (a.country_code ?? "").toUpperCase(),
+    ].filter((l): l is string => Boolean(l && String(l).trim())),
+    dhl_option_label: isPs ? "DHL Servicepunt" : "DHL Thuisbezorgd",
+    service_point: isPs
+      ? [dhlData.service_point_name, dhlData.service_point_address]
+          .filter(Boolean)
+          .join(" | ") || null
+      : null,
+    items: ((order.items ?? []) as any[]).map((i) => ({
+      product_title: i.product_title ?? i.title ?? "Onbekend product",
+      variant_title: i.variant_title ?? null,
+      sku: i.variant_sku ?? null,
+      quantity: Number(i.quantity ?? 0),
+    })),
+  }
+
+  res.setHeader("content-type", "text/html; charset=utf-8")
+  res.status(200).send(buildPicklistHtml(view))
+}
