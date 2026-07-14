@@ -1,11 +1,13 @@
 import { defineMiddlewares } from "@medusajs/framework/http"
 
+import { friendlyErrorHandler } from "../lib/friendly-error-handler"
 import { passwordChangedNotifier } from "../lib/password-changed-notifier"
 import { rateLimit } from "../lib/rate-limiter"
 
 const MINUTE = 60 * 1000
 
 export default defineMiddlewares({
+  errorHandler: friendlyErrorHandler,
   routes: [
     {
       // The broker pushes HMAC-signed payment callbacks here. The signature is
