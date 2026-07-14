@@ -91,4 +91,67 @@ describe("POST /admin/orders/:id/fulfillment-checklist", () => {
     expect(res.statusCode).toBe(500)
     expect(res.body.message).toBe("Opslaan mislukt.")
   })
+
+  it("serializes concurrent writes for the same order so neither tick is lost", async () => {
+    // Fake order module backed by a mutable store, standing in for the DB
+    // row. retrieveOrder waits ~10ms before returning a snapshot of the
+    // store, and updateOrders writes the store's metadata. Without the
+    // per-order write queue, two concurrent POSTs both read the same
+    // pre-write snapshot and the second updateOrders silently clobbers the
+    // first tick (lost update).
+    const store = { metadata: { existing_key: "keep-me" } as Record<string, unknown> }
+
+    const orderModule = {
+      // Snapshot is captured synchronously at call time (mirroring a real DB
+      // read that starts immediately but takes ~10ms to come back), so two
+      // calls issued back to back both see the pre-write state.
+      retrieveOrder: jest.fn().mockImplementation(async () => {
+        const snapshot = { ...store.metadata }
+        await new Promise((resolve) => setTimeout(resolve, 10))
+        return { id: "order_1", metadata: snapshot }
+      }),
+      updateOrders: jest.fn().mockImplementation(async (updates: any[]) => {
+        store.metadata = updates[0].metadata
+        return []
+      }),
+    }
+    const userModule = {
+      retrieveUser: jest.fn().mockResolvedValue({
+        id: "user_1",
+        first_name: "Anna",
+        last_name: "Test",
+        email: "anna@example.com",
+      }),
+    }
+    const logger = { error: jest.fn(), warn: jest.fn(), info: jest.fn() }
+
+    const makeConcurrentReq = (itemId: string) => ({
+      params: { id: "order_1" },
+      auth_context: { actor_id: "user_1" },
+      body: { action: "tick_item", item_id: itemId, checked: true },
+      scope: {
+        resolve: (key: string) => {
+          if (key === "order") return orderModule
+          if (key === "user") return userModule
+          if (key === "logger") return logger
+          throw new Error(`unexpected resolve: ${key}`)
+        },
+      },
+    })
+
+    const res1 = makeRes()
+    const res2 = makeRes()
+
+    await Promise.all([
+      POST(makeConcurrentReq("item_1") as any, res1),
+      POST(makeConcurrentReq("item_2") as any, res2),
+    ])
+
+    expect(res1.statusCode).toBe(200)
+    expect(res2.statusCode).toBe(200)
+
+    const items = (store.metadata.fulfillment_checklist as any).items
+    expect(items.item_1).toBeDefined()
+    expect(items.item_2).toBeDefined()
+  })
 })

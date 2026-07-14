@@ -12,6 +12,26 @@ import {
   type ChecklistAction,
 } from "../../../../../admin/widgets/order-fulfillment-checklist.logic"
 
+// Serializes checklist writes per order. Two concurrent POSTs for the same
+// order would otherwise both read the same metadata snapshot and the second
+// write would silently drop the first one's tick. An in-process chain is
+// sufficient because the backend runs as a single Railway instance.
+const orderWriteChains = new Map<string, Promise<unknown>>()
+
+function withOrderWriteQueue<T>(orderId: string, fn: () => Promise<T>): Promise<T> {
+  const prev = orderWriteChains.get(orderId) ?? Promise.resolve()
+  const run = prev.then(fn, fn)
+  const marker = run.then(
+    () => undefined,
+    () => undefined
+  )
+  orderWriteChains.set(orderId, marker)
+  void marker.then(() => {
+    if (orderWriteChains.get(orderId) === marker) orderWriteChains.delete(orderId)
+  })
+  return run
+}
+
 // POST /admin/orders/:id/fulfillment-checklist
 // Applies ONE checklist action (item tick, package-closed confirm, override)
 // to order.metadata.fulfillment_checklist. The acting admin user is stamped
@@ -35,33 +55,41 @@ export const POST = async (
   const userModule = req.scope.resolve(Modules.USER) as IUserModuleService
 
   try {
-    const [order, user] = await Promise.all([
-      orderModule.retrieveOrder(orderId),
-      userModule.retrieveUser(actorId).catch(() => null),
-    ])
-    const byName = user
-      ? `${user.first_name ?? ""} ${user.last_name ?? ""}`.trim() || user.email || actorId
-      : actorId
+    const outcome = await withOrderWriteQueue(orderId, async () => {
+      const [order, user] = await Promise.all([
+        orderModule.retrieveOrder(orderId),
+        userModule.retrieveUser(actorId).catch(() => null),
+      ])
+      const byName = user
+        ? `${user.first_name ?? ""} ${user.last_name ?? ""}`.trim() || user.email || actorId
+        : actorId
 
-    const state = parseChecklist(order.metadata)
-    const result = applyChecklistAction(
-      state,
-      action,
-      { by_id: actorId, by_name: byName },
-      new Date().toISOString()
-    )
-    if ("error" in result) {
-      res.status(400).json({ message: result.error })
+      const state = parseChecklist(order.metadata)
+      const result = applyChecklistAction(
+        state,
+        action,
+        { by_id: actorId, by_name: byName },
+        new Date().toISOString()
+      )
+      if ("error" in result) {
+        return { error: result.error } as const
+      }
+
+      const metadata = {
+        ...((order.metadata ?? {}) as Record<string, unknown>),
+        fulfillment_checklist: result.next,
+      }
+      await orderModule.updateOrders([{ id: orderId, metadata } as never])
+
+      return { next: result.next } as const
+    })
+
+    if ("error" in outcome) {
+      res.status(400).json({ message: outcome.error })
       return
     }
 
-    const metadata = {
-      ...((order.metadata ?? {}) as Record<string, unknown>),
-      fulfillment_checklist: result.next,
-    }
-    await orderModule.updateOrders([{ id: orderId, metadata } as never])
-
-    res.status(200).json({ fulfillment_checklist: result.next })
+    res.status(200).json({ fulfillment_checklist: outcome.next })
   } catch (err) {
     logger.error(
       `admin fulfillment-checklist: order ${orderId}: ${(err as Error).message}`
