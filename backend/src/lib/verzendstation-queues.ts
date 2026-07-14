@@ -99,7 +99,11 @@ export function buildVerzendstationQueues(rows: QueueOrderRow[]): Verzendstation
     if (row.status === "canceled" || row.status === "draft" || row.status === "archived") {
       continue
     }
-    const active = (row.fulfillments ?? []).find((f) => !f.canceled_at)
+    // Prefer a non-canceled fulfillment that still needs action (not shipped);
+    // an order with a shipped fulfillment AND a fresh redo must not be hidden
+    // behind the shipped one.
+    const nonCanceled = (row.fulfillments ?? []).filter((f) => !f.canceled_at)
+    const active = nonCanceled.find((f) => !f.shipped_at) ?? nonCanceled[0]
     if (active?.shipped_at) continue
     if (active?.packed_at) {
       to_ship.push(toEntry(row, iso(active.packed_at)))

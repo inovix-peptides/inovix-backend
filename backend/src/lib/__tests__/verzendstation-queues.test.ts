@@ -99,6 +99,42 @@ describe("buildVerzendstationQueues", () => {
     const q = buildVerzendstationQueues([row({ shipping_address: null })])
     expect(q.to_process[0].customer_name).toBe("jan@example.com")
   })
+
+  it("skips a mid-flight fulfillment (exists but not packed yet)", () => {
+    const midFlight = row({
+      id: "o9",
+      fulfillments: [{ id: "f4", packed_at: null, shipped_at: null, canceled_at: null }],
+    })
+    const q = buildVerzendstationQueues([midFlight])
+    expect(q.to_process).toHaveLength(0)
+    expect(q.to_ship).toHaveLength(0)
+  })
+
+  it("prefers the unshipped fulfillment when a shipped one also exists (redo after ship)", () => {
+    const redoPacked = row({
+      id: "o10",
+      fulfillments: [
+        { id: "f5", packed_at: "2026-07-12T10:00:00.000Z", shipped_at: "2026-07-12T15:00:00.000Z", canceled_at: null },
+        { id: "f6", packed_at: "2026-07-13T09:00:00.000Z", shipped_at: null, canceled_at: null },
+      ],
+    })
+    const q = buildVerzendstationQueues([redoPacked])
+    expect(q.to_ship.map((e) => e.id)).toEqual(["o10"])
+    expect(q.to_ship[0].packed_at).toBe("2026-07-13T09:00:00.000Z")
+  })
+
+  it("a canceled fulfillment next to a shipped one still counts as shipped", () => {
+    const canceledPlusShipped = row({
+      id: "o11",
+      fulfillments: [
+        { id: "f7", packed_at: "2026-07-12T10:00:00.000Z", shipped_at: null, canceled_at: "2026-07-12T11:00:00.000Z" },
+        { id: "f8", packed_at: "2026-07-12T12:00:00.000Z", shipped_at: "2026-07-12T15:00:00.000Z", canceled_at: null },
+      ],
+    })
+    const q = buildVerzendstationQueues([canceledPlusShipped])
+    expect(q.to_process).toHaveLength(0)
+    expect(q.to_ship).toHaveLength(0)
+  })
 })
 
 describe("selectStaleUnshipped", () => {
