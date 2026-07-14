@@ -1,0 +1,215 @@
+import {
+  allItemsTicked,
+  applyChecklistAction,
+  deriveStepStates,
+  emptyChecklist,
+  evaluatePaymentGate,
+  hasOverride,
+  parseChecklist,
+  paymentViewGate,
+} from "../order-fulfillment-checklist.logic"
+
+const actor = { by_id: "user_1", by_name: "Anna Test" }
+const NOW = "2026-07-14T10:00:00.000Z"
+
+describe("parseChecklist", () => {
+  it("returns the empty state for missing or malformed metadata", () => {
+    expect(parseChecklist(null)).toEqual(emptyChecklist())
+    expect(parseChecklist({})).toEqual(emptyChecklist())
+    expect(parseChecklist({ fulfillment_checklist: "garbage" })).toEqual(emptyChecklist())
+    expect(parseChecklist({ fulfillment_checklist: { items: [1, 2] } }).items).toEqual({})
+  })
+
+  it("round-trips a valid state and drops malformed entries", () => {
+    const state = {
+      version: 1,
+      items: { item_1: { at: NOW, ...actor }, broken: { nope: true } },
+      package_closed: { at: NOW, ...actor },
+      overrides: [
+        { step: "items", reason: "spoedlevering", at: NOW, ...actor },
+        { step: "bogus", reason: "x" },
+      ],
+    }
+    const parsed = parseChecklist({ fulfillment_checklist: state })
+    expect(Object.keys(parsed.items)).toEqual(["item_1"])
+    expect(parsed.package_closed?.by_name).toBe("Anna Test")
+    expect(parsed.overrides).toHaveLength(1)
+    expect(parsed.overrides[0].step).toBe("items")
+  })
+})
+
+describe("applyChecklistAction", () => {
+  it("ticks and unticks an item with an actor stamp", () => {
+    const r1 = applyChecklistAction(
+      emptyChecklist(),
+      { action: "tick_item", item_id: "item_1", checked: true },
+      actor,
+      NOW
+    )
+    if ("error" in r1) throw new Error(r1.error)
+    expect(r1.next.items.item_1).toEqual({ at: NOW, ...actor })
+
+    const r2 = applyChecklistAction(
+      r1.next,
+      { action: "tick_item", item_id: "item_1", checked: false },
+      actor,
+      NOW
+    )
+    if ("error" in r2) throw new Error(r2.error)
+    expect(r2.next.items.item_1).toBeUndefined()
+  })
+
+  it("rejects a tick without item_id", () => {
+    const r = applyChecklistAction(
+      emptyChecklist(),
+      { action: "tick_item", item_id: "", checked: true },
+      actor,
+      NOW
+    )
+    expect("error" in r).toBe(true)
+  })
+
+  it("sets and clears package_closed", () => {
+    const r1 = applyChecklistAction(
+      emptyChecklist(),
+      { action: "package_closed", checked: true },
+      actor,
+      NOW
+    )
+    if ("error" in r1) throw new Error(r1.error)
+    expect(r1.next.package_closed?.at).toBe(NOW)
+    const r2 = applyChecklistAction(
+      r1.next,
+      { action: "package_closed", checked: false },
+      actor,
+      NOW
+    )
+    if ("error" in r2) throw new Error(r2.error)
+    expect(r2.next.package_closed).toBeNull()
+  })
+
+  it("appends an override with a >= 10 char reason and rejects short reasons", () => {
+    const short = applyChecklistAction(
+      emptyChecklist(),
+      { action: "override", step: "items", reason: "te kort" },
+      actor,
+      NOW
+    )
+    expect("error" in short).toBe(true)
+
+    const ok = applyChecklistAction(
+      emptyChecklist(),
+      { action: "override", step: "payment", reason: "handmatig betaald per bank" },
+      actor,
+      NOW
+    )
+    if ("error" in ok) throw new Error(ok.error)
+    expect(ok.next.overrides).toHaveLength(1)
+    expect(hasOverride(ok.next, "payment")).toBe(true)
+    expect(hasOverride(ok.next, "items")).toBe(false)
+  })
+
+  it("rejects an unknown action", () => {
+    const r = applyChecklistAction(emptyChecklist(), { action: "nope" } as never, actor, NOW)
+    expect("error" in r).toBe(true)
+  })
+})
+
+describe("allItemsTicked", () => {
+  it("is true only when every item id is ticked and there is at least one item", () => {
+    const state = emptyChecklist()
+    state.items = { a: { at: NOW, ...actor } }
+    expect(allItemsTicked(["a"], state)).toBe(true)
+    expect(allItemsTicked(["a", "b"], state)).toBe(false)
+    expect(allItemsTicked([], state)).toBe(false)
+  })
+})
+
+describe("evaluatePaymentGate", () => {
+  const paid = { amount: 100, captured_amount: 100, refunded_amount: 0, canceled_at: null }
+  it("passes a fully captured, unrefunded payment", () => {
+    expect(evaluatePaymentGate(paid)).toEqual({ ok: true, reason: null })
+  })
+  it("blocks when no payment exists", () => {
+    expect(evaluatePaymentGate(null).ok).toBe(false)
+  })
+  it("blocks a canceled payment", () => {
+    expect(evaluatePaymentGate({ ...paid, canceled_at: NOW }).ok).toBe(false)
+  })
+  it("blocks any refund", () => {
+    expect(evaluatePaymentGate({ ...paid, refunded_amount: 5 }).ok).toBe(false)
+  })
+  it("blocks a partial or missing capture", () => {
+    expect(evaluatePaymentGate({ ...paid, captured_amount: 50 }).ok).toBe(false)
+    expect(evaluatePaymentGate({ ...paid, captured_amount: 0 }).ok).toBe(false)
+  })
+  it("handles BigNumber-ish string amounts", () => {
+    expect(
+      evaluatePaymentGate({ amount: "100", captured_amount: "100", refunded_amount: "0" }).ok
+    ).toBe(true)
+  })
+})
+
+describe("paymentViewGate", () => {
+  const view = {
+    ref: "x", status: "captured", mollie_payment_id: null, captured_at: NOW,
+    currency: "EUR", amount: 100, captured_total: 100, refunded_total: 0,
+    remaining_refundable: 100, refunds: [], broker_unavailable: false,
+  }
+  it("passes a captured, unrefunded view", () => {
+    expect(paymentViewGate(view).ok).toBe(true)
+  })
+  it("blocks null, refunded and under-captured views", () => {
+    expect(paymentViewGate(null).ok).toBe(false)
+    expect(paymentViewGate({ ...view, refunded_total: 1 }).ok).toBe(false)
+    expect(paymentViewGate({ ...view, captured_total: 10 }).ok).toBe(false)
+    expect(paymentViewGate({ ...view, status: "canceled" }).ok).toBe(false)
+  })
+})
+
+describe("deriveStepStates", () => {
+  const base = {
+    paymentOk: false, paymentOverridden: false,
+    itemsTicked: false, itemsOverridden: false,
+    hasLabel: false, packageClosed: false, shipped: false,
+  }
+  it("blocks everything when payment fails", () => {
+    const s = deriveStepStates(base)
+    expect(s.payment).toBe("blocked")
+    expect(s.pick).toBe("locked")
+    expect(s.label).toBe("locked")
+  })
+  it("walks the happy path in order", () => {
+    let s = deriveStepStates({ ...base, paymentOk: true })
+    expect(s.payment).toBe("done")
+    expect(s.pick).toBe("active")
+    expect(s.label).toBe("locked")
+
+    s = deriveStepStates({ ...base, paymentOk: true, itemsTicked: true })
+    expect(s.label).toBe("active")
+
+    s = deriveStepStates({ ...base, paymentOk: true, itemsTicked: true, hasLabel: true })
+    expect(s.close).toBe("active")
+    expect(s.ship).toBe("locked")
+
+    s = deriveStepStates({ ...base, paymentOk: true, itemsTicked: true, hasLabel: true, packageClosed: true })
+    expect(s.ship).toBe("active")
+  })
+  it("an override counts as done", () => {
+    const s = deriveStepStates({ ...base, paymentOverridden: true, itemsOverridden: true })
+    expect(s.payment).toBe("done")
+    expect(s.pick).toBe("done")
+    expect(s.label).toBe("active")
+  })
+  it("legacy orders: an existing label or shipment forces earlier steps done", () => {
+    const s = deriveStepStates({ ...base, hasLabel: true })
+    expect(s.payment).toBe("done")
+    expect(s.pick).toBe("done")
+    expect(s.label).toBe("done")
+    expect(s.close).toBe("active")
+
+    const shipped = deriveStepStates({ ...base, shipped: true })
+    expect(shipped.ship).toBe("done")
+    expect(shipped.close).toBe("done")
+  })
+})
