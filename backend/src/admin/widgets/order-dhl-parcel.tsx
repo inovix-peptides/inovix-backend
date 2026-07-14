@@ -9,6 +9,7 @@ import {
   toast,
 } from "@medusajs/ui"
 import { useEffect, useState } from "react"
+import { decodeBase64DataUri } from "./order-dhl-parcel.logic"
 
 // ─── Types for the extra fields we fetch beyond the shallow AdminOrder ────────
 
@@ -142,6 +143,24 @@ function getLabelPdfUrl(fulfillment: DhlFulfillment): string | null {
   }
   // Fall back to labels[0].label_url
   return fulfillment.labels?.[0]?.label_url ?? null
+}
+
+// Open the label PDF in a new tab. The PDF is stored as a
+// `data:application/pdf;base64,...` URI, and browsers refuse to navigate a
+// top-level tab to a data: URL (anti-phishing) | a plain <a href> just lands on
+// about:blank. So we decode it into a Blob + object URL, which IS allowed to
+// open. A real hosted URL (future R2 upload) is opened directly.
+function openLabelPdf(url: string) {
+  const decoded = decodeBase64DataUri(url)
+  if (!decoded) {
+    window.open(url, "_blank", "noopener,noreferrer")
+    return
+  }
+  const blob = new Blob([decoded.bytes as BlobPart], { type: decoded.mime })
+  const objectUrl = URL.createObjectURL(blob)
+  window.open(objectUrl, "_blank", "noopener")
+  // Revoke once the new tab has had time to load it.
+  setTimeout(() => URL.revokeObjectURL(objectUrl), 60_000)
 }
 
 // Names of products on the order that have no weight. DHL cannot create a label
@@ -504,14 +523,13 @@ const OrderDhlParcelWidget = ({ data }: DetailWidgetProps<AdminOrder>) => {
 
             {/* Download PDF */}
             {labelPdfUrl && (
-              <a
-                href={labelPdfUrl}
-                target="_blank"
-                rel="noopener noreferrer"
-                className="txt-small text-ui-fg-interactive hover:underline"
+              <button
+                type="button"
+                onClick={() => openLabelPdf(labelPdfUrl)}
+                className="txt-small text-ui-fg-interactive hover:underline text-left"
               >
                 Download label-PDF
-              </a>
+              </button>
             )}
           </div>
           <div className="flex items-center justify-end px-6 py-4">
