@@ -34,6 +34,11 @@ import {
   CUSTOMER_WELCOME,
   isCustomerWelcomeData,
 } from './customer-welcome'
+import {
+  UnshippedOrdersAlertTemplate,
+  UNSHIPPED_ORDERS_ALERT,
+  isUnshippedOrdersAlertData,
+} from './unshipped-orders-alert'
 
 export const EmailTemplates = {
   INVITE_USER,
@@ -46,6 +51,7 @@ export const EmailTemplates = {
   ABANDONED_CART_PAID,
   PAYMENT_FAILED,
   CUSTOMER_WELCOME,
+  UNSHIPPED_ORDERS_ALERT,
 } as const
 
 export type EmailTemplateType = keyof typeof EmailTemplates
@@ -142,6 +148,15 @@ export function generateEmailTemplate(templateKey: string, data: unknown): React
       }
       return <CustomerWelcomeTemplate {...data} />
 
+    case EmailTemplates.UNSHIPPED_ORDERS_ALERT:
+      if (!isUnshippedOrdersAlertData(data)) {
+        throw new MedusaError(
+          MedusaError.Types.INVALID_DATA,
+          `Invalid data for template "${EmailTemplates.UNSHIPPED_ORDERS_ALERT}"`
+        )
+      }
+      return <UnshippedOrdersAlertTemplate {...data} />
+
     default:
       throw new MedusaError(
         MedusaError.Types.INVALID_DATA,
@@ -161,4 +176,5 @@ export {
   AbandonedCartPaidTemplate,
   PaymentFailedTemplate,
   CustomerWelcomeTemplate,
+  UnshippedOrdersAlertTemplate,
 }

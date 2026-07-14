@@ -1,0 +1,89 @@
+import type { MedusaContainer } from "@medusajs/framework/types"
+import { ContainerRegistrationKeys, Modules } from "@medusajs/framework/utils"
+import type { INotificationModuleService, Logger } from "@medusajs/framework/types"
+
+import { EmailTemplates } from "../modules/email-notifications/templates"
+import {
+  buildVerzendstationQueues,
+  QUEUE_ORDER_FIELDS,
+  selectStaleUnshipped,
+  type QueueEntry,
+  type QueueOrderRow,
+} from "../lib/verzendstation-queues"
+
+// Orders whose DHL label was made this long ago without a "markeer als
+// verzonden" click get flagged to the operator. Without that click the
+// customer never receives the track-and-trace mail.
+const MAX_AGE_MS = 24 * 60 * 60 * 1000
+
+function formatDutchDate(iso: string | null): string {
+  if (!iso) return "onbekend"
+  const t = new Date(iso)
+  if (!Number.isFinite(t.getTime())) return "onbekend"
+  return t.toLocaleDateString("nl-NL", { day: "numeric", month: "long", year: "numeric" })
+}
+
+// Pure mapping from stale queue entries to the notification payload. Exported
+// for unit tests.
+export function buildAlertPayload(stale: QueueEntry[], todayIso: string) {
+  return {
+    idempotency_key: `unshipped-orders-alert-${todayIso}`,
+    data: {
+      emailOptions: {
+        subject: `Let op: ${stale.length} ingepakte bestelling(en) nog niet verzonden`,
+      },
+      orders: stale.map((e) => ({
+        display_id: e.display_id != null ? String(e.display_id) : "?",
+        customer_name: e.customer_name || "Onbekende klant",
+        packed_at: formatDutchDate(e.packed_at),
+      })),
+    },
+  }
+}
+
+// Daily 07:00 safety net: any order with a label made >24h ago that was never
+// marked shipped gets ONE summary email to the operator. The per-day
+// idempotency key makes reruns harmless.
+export default async function alertUnshippedOrders(container: MedusaContainer) {
+  const logger = container.resolve(ContainerRegistrationKeys.LOGGER) as Logger
+  const query = container.resolve(ContainerRegistrationKeys.QUERY)
+  const notifications = container.resolve(
+    Modules.NOTIFICATION
+  ) as INotificationModuleService
+
+  const { data } = await query.graph({
+    entity: "order",
+    fields: QUEUE_ORDER_FIELDS,
+    pagination: { take: 200, skip: 0, order: { created_at: "DESC" } },
+  })
+
+  const queues = buildVerzendstationQueues((data ?? []) as QueueOrderRow[])
+  const stale = selectStaleUnshipped(queues, Date.now(), MAX_AGE_MS)
+  if (stale.length === 0) {
+    return
+  }
+
+  const to =
+    process.env.SUPPORT_EMAIL || process.env.CONTACT_EMAIL || "info@inovix.nl"
+  const today = new Date().toISOString().slice(0, 10)
+  const payload = buildAlertPayload(stale, today)
+
+  await notifications.createNotifications({
+    to,
+    channel: "email",
+    template: EmailTemplates.UNSHIPPED_ORDERS_ALERT,
+    idempotency_key: payload.idempotency_key,
+    trigger_type: "job.alert-unshipped-orders",
+    data: payload.data,
+  })
+
+  logger.info(
+    `[alert-unshipped-orders] alerted ${to} about ${stale.length} unshipped order(s)`
+  )
+}
+
+export const config = {
+  name: "alert-unshipped-orders",
+  // daily at 07:00
+  schedule: "0 7 * * *",
+}
