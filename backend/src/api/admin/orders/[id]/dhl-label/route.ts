@@ -2,6 +2,12 @@ import type { MedusaRequest, MedusaResponse } from "@medusajs/framework"
 import { ContainerRegistrationKeys, MedusaError } from "@medusajs/framework/utils"
 import type { Logger } from "@medusajs/framework/types"
 import { createDhlParcelShipmentWorkflow } from "../../../../../workflows/create-dhl-parcel-shipment"
+import { resolveBrokerPayment } from "../payment/resolve"
+import {
+  allItemsTicked,
+  hasOverride,
+  parseChecklist,
+} from "../../../../../admin/widgets/order-fulfillment-checklist.logic"
 
 // Fields loaded via query.graph to give the workflow everything it reads.
 //
@@ -30,6 +36,7 @@ const ORDER_FIELDS = [
   "id",
   "display_id",
   "status",
+  "metadata",
   "email",
   "shipping_address.*",
   "items.*",
@@ -112,6 +119,24 @@ export async function POST(
   ).length
   const labelAttempt = priorDhlFulfillments + 1
 
+  // 1d. Fulfillment-checklist gates. The checklist widget disables the button
+  //     client-side; this is the server-side backstop so the flow stays
+  //     foolproof even via direct API calls. An explicit, reasoned override
+  //     recorded in the checklist (metadata) unlocks each gate separately.
+  const checklist = parseChecklist((raw as any).metadata)
+  const itemIds = ((raw.items ?? []) as any[]).map((i: any) => String(i.id))
+  if (!allItemsTicked(itemIds, checklist) && !hasOverride(checklist, "items")) {
+    res.status(400).json({
+      message:
+        "Nog niet alle items zijn afgevinkt op de picklijst. Vink eerst elk item af in de verzendchecklist, of gebruik de override met reden.",
+    })
+    return
+  }
+
+  // The broker payment feeds the payment gate inside the workflow's
+  // validate-order step (fully captured, no refunds, not canceled).
+  const payment = await resolveBrokerPayment(query, orderId)
+
   // 2. Reshape items: expose item.product = item.variant?.product so the
   //    workflow (validate-order / build-payload / service) reads
   //    item.product.weight as expected. The natural Medusa v2 graph path is
@@ -129,7 +154,12 @@ export async function POST(
   // 3. Run the workflow.
   try {
     const { result } = await createDhlParcelShipmentWorkflow(req.scope).run({
-      input: { order, labelAttempt },
+      input: {
+        order,
+        labelAttempt,
+        payment,
+        paymentOverridden: hasOverride(checklist, "payment"),
+      },
     })
 
     // 4. Map the response. Prefer fulfillment.data.* fields (written by
