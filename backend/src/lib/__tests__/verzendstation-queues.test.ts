@@ -123,6 +123,45 @@ describe("buildVerzendstationQueues", () => {
     expect(q.to_ship[0].packed_at).toBe("2026-07-13T09:00:00.000Z")
   })
 
+  it("pulls a packed-not-shipped order out of both queues when the payment is fully refunded", () => {
+    const refundedAfterPacking = row({
+      id: "o12",
+      fulfillments: [{ id: "f9", packed_at: "2026-07-13T10:00:00.000Z", shipped_at: null, canceled_at: null }],
+      payment_collections: [
+        { payments: [{ provider_id: BROKER, amount: 100, captured_amount: 100, refunded_amount: 100, canceled_at: null }] },
+      ],
+    })
+    const q = buildVerzendstationQueues([refundedAfterPacking])
+    expect(q.to_ship).toHaveLength(0)
+    expect(q.to_process).toHaveLength(0)
+  })
+
+  it("keeps a packed-not-shipped order in to_ship when payment is overridden (manual bank transfer)", () => {
+    const overriddenPacked = row({
+      id: "o13",
+      fulfillments: [{ id: "f10", packed_at: "2026-07-13T10:00:00.000Z", shipped_at: null, canceled_at: null }],
+      payment_collections: [],
+      metadata: {
+        fulfillment_checklist: {
+          version: 1,
+          items: {},
+          package_closed: null,
+          overrides: [
+            {
+              step: "payment",
+              reason: "handmatige bankoverschrijving",
+              at: "2026-07-14T09:00:00.000Z",
+              by_id: "u1",
+              by_name: "Anna",
+            },
+          ],
+        },
+      },
+    })
+    const q = buildVerzendstationQueues([overriddenPacked])
+    expect(q.to_ship.map((e) => e.id)).toEqual(["o13"])
+  })
+
   it("a canceled fulfillment next to a shipped one still counts as shipped", () => {
     const canceledPlusShipped = row({
       id: "o11",

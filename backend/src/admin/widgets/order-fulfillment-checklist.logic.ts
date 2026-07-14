@@ -191,9 +191,12 @@ export function paymentViewGate(view: PaymentView | null): PaymentGate {
 export type StepId = "payment" | "pick" | "label" | "close" | "ship"
 export type StepState = "done" | "active" | "locked" | "blocked"
 
-// Sequential unlock rules. An existing label or shipment forces the earlier
-// steps done: legacy orders fulfilled before the checklist existed must never
-// demand retroactive ticks.
+// Sequential unlock rules. A SHIPMENT still forces every step done: legacy
+// orders fulfilled before the checklist existed must never demand
+// retroactive ticks. A label alone no longer forces the payment step done,
+// because the payment gate re-evaluates live: a refund arriving after the
+// package was already labeled must flip step 1 back to "blocked" and
+// re-lock steps 4-5 (close, ship) so the order can't be shipped out unpaid.
 export function deriveStepStates(input: {
   paymentOk: boolean
   paymentOverridden: boolean
@@ -204,7 +207,7 @@ export function deriveStepStates(input: {
   shipped: boolean
 }): Record<StepId, StepState> {
   const paymentDone =
-    input.paymentOk || input.paymentOverridden || input.hasLabel || input.shipped
+    input.paymentOk || input.paymentOverridden || input.shipped
   const pickDone =
     input.itemsTicked || input.itemsOverridden || input.hasLabel || input.shipped
   const labelDone = input.hasLabel || input.shipped
@@ -214,7 +217,7 @@ export function deriveStepStates(input: {
     payment: paymentDone ? "done" : "blocked",
     pick: pickDone ? "done" : paymentDone ? "active" : "locked",
     label: labelDone ? "done" : paymentDone && pickDone ? "active" : "locked",
-    close: closeDone ? "done" : labelDone ? "active" : "locked",
-    ship: shipDone ? "done" : closeDone ? "active" : "locked",
+    close: closeDone ? "done" : labelDone && paymentDone ? "active" : "locked",
+    ship: shipDone ? "done" : closeDone && paymentDone ? "active" : "locked",
   }
 }

@@ -113,6 +113,26 @@ describe("applyChecklistAction", () => {
     const r = applyChecklistAction(emptyChecklist(), { action: "nope" } as never, actor, NOW)
     expect("error" in r).toBe(true)
   })
+
+  it("rejects an override with an unknown step", () => {
+    const r = applyChecklistAction(
+      emptyChecklist(),
+      { action: "override", step: "bogus" as never, reason: "een geldige lange reden" },
+      actor,
+      NOW
+    )
+    expect("error" in r).toBe(true)
+  })
+
+  it("rejects an override with a whitespace-only reason", () => {
+    const r = applyChecklistAction(
+      emptyChecklist(),
+      { action: "override", step: "payment", reason: "            " },
+      actor,
+      NOW
+    )
+    expect("error" in r).toBe(true)
+  })
 })
 
 describe("allItemsTicked", () => {
@@ -201,8 +221,15 @@ describe("deriveStepStates", () => {
     expect(s.pick).toBe("done")
     expect(s.label).toBe("active")
   })
-  it("legacy orders: an existing label or shipment forces earlier steps done", () => {
+  it("an unpaid or refunded order with a label stays blocked on payment (re-lock)", () => {
     const s = deriveStepStates({ ...base, hasLabel: true })
+    expect(s.payment).toBe("blocked")
+    expect(s.pick).toBe("done")
+    expect(s.label).toBe("done")
+    expect(s.close).toBe("locked")
+  })
+  it("legacy orders: a paid order with an existing label forces earlier steps done", () => {
+    const s = deriveStepStates({ ...base, paymentOk: true, hasLabel: true })
     expect(s.payment).toBe("done")
     expect(s.pick).toBe("done")
     expect(s.label).toBe("done")
@@ -211,5 +238,17 @@ describe("deriveStepStates", () => {
     const shipped = deriveStepStates({ ...base, shipped: true })
     expect(shipped.ship).toBe("done")
     expect(shipped.close).toBe("done")
+  })
+  it("refund after packing re-locks close and ship", () => {
+    const s = deriveStepStates({
+      ...base,
+      paymentOk: false,
+      itemsTicked: true,
+      hasLabel: true,
+      packageClosed: true,
+    })
+    expect(s.payment).toBe("blocked")
+    expect(s.close).toBe("done")
+    expect(s.ship).toBe("locked")
   })
 })

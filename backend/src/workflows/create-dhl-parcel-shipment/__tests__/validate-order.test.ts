@@ -187,4 +187,16 @@ describe("payment gate", () => {
     )
     expect(result.output).toMatchObject({ valid: true })
   })
+
+  it("throws when the payment is canceled, even if paymentOverridden is falsy but not literal true", async () => {
+    await expect(
+      validateOrder(
+        {
+          order: baseOrder,
+          payment: { amount: 100, captured_amount: 100, refunded_amount: 0, canceled_at: "2026-07-14T09:00:00.000Z" },
+        } as any,
+        { container: makeContainer(presets) } as any,
+      ),
+    ).rejects.toThrow(/geannuleerd/)
+  })
 })

@@ -23,7 +23,7 @@ import {
 //     undefined (reading 'strategy')". Both errors 500 the label request BEFORE
 //     the try/catch below; (2) was the original order #13 failure and (1) was
 //     hiding behind it. The order widget hit the same walls, see
-//     order-dhl-parcel.tsx.
+//     order-fulfillment-checklist.tsx.
 //
 // - items.variant.product.*: the product-weight path. After loading, each item
 //   is reshaped so item.product = item.variant?.product, matching the shape the

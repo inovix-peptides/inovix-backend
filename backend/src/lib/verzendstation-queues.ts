@@ -4,7 +4,11 @@
 // fulfillment timestamps. Shared by the queue API route and the daily
 // unshipped-orders alert job.
 
-import { evaluatePaymentGate } from "../admin/widgets/order-fulfillment-checklist.logic"
+import {
+  evaluatePaymentGate,
+  hasOverride,
+  parseChecklist,
+} from "../admin/widgets/order-fulfillment-checklist.logic"
 
 const BROKER_PROVIDER_ID = "pp_via_broker_via_broker"
 
@@ -16,6 +20,7 @@ export const QUEUE_ORDER_FIELDS = [
   "status",
   "created_at",
   "email",
+  "metadata",
   "shipping_address.first_name",
   "shipping_address.last_name",
   "items.id",
@@ -37,6 +42,7 @@ export type QueueOrderRow = {
   status?: string | null
   created_at?: string | Date | null
   email?: string | null
+  metadata?: Record<string, unknown> | null
   shipping_address?: {
     first_name?: string | null
     last_name?: string | null
@@ -105,16 +111,26 @@ export function buildVerzendstationQueues(rows: QueueOrderRow[]): Verzendstation
     const nonCanceled = (row.fulfillments ?? []).filter((f) => !f.canceled_at)
     const active = nonCanceled.find((f) => !f.shipped_at) ?? nonCanceled[0]
     if (active?.shipped_at) continue
+
+    // Evaluated once per row: a refund after packing must pull the order out
+    // of the ship queue (spec edge case), while a logged payment override
+    // (e.g. a manual bank transfer) keeps legitimately-overridden orders
+    // visible even though the broker payment itself never went "ok".
+    const payment = (row.payment_collections ?? [])
+      .flatMap((c) => c.payments ?? [])
+      .find((p) => p?.provider_id === BROKER_PROVIDER_ID)
+    const paymentOk =
+      evaluatePaymentGate((payment as never) ?? null).ok ||
+      hasOverride(parseChecklist(row.metadata), "payment")
+
     if (active?.packed_at) {
+      if (!paymentOk) continue
       to_ship.push(toEntry(row, iso(active.packed_at)))
       continue
     }
     if (active) continue // fulfillment exists but not packed yet: mid-flight, skip
 
-    const payment = (row.payment_collections ?? [])
-      .flatMap((c) => c.payments ?? [])
-      .find((p) => p?.provider_id === BROKER_PROVIDER_ID)
-    if (!evaluatePaymentGate((payment as never) ?? null).ok) continue
+    if (!paymentOk) continue
     to_process.push(toEntry(row, null))
   }
 

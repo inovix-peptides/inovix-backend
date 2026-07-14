@@ -67,7 +67,7 @@ const validateOrder = createStep(
       )
     }
 
-    if (!input.paymentOverridden) {
+    if (input.paymentOverridden !== true) {
       const gate = evaluatePaymentGate(input.payment ?? null)
       if (!gate.ok) {
         throw new MedusaError(

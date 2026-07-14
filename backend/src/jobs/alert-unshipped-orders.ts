@@ -51,10 +51,13 @@ export default async function alertUnshippedOrders(container: MedusaContainer) {
     Modules.NOTIFICATION
   ) as INotificationModuleService
 
+  // The Verzendstation queue page only shows the newest 200 orders; this
+  // safety net must look further back so an order that scrolled off the
+  // visible page doesn't silently skip the unshipped alert.
   const { data } = await query.graph({
     entity: "order",
     fields: QUEUE_ORDER_FIELDS,
-    pagination: { take: 200, skip: 0, order: { created_at: "DESC" } },
+    pagination: { take: 1000, skip: 0, order: { created_at: "DESC" } },
   })
 
   const queues = buildVerzendstationQueues((data ?? []) as QueueOrderRow[])
@@ -84,6 +87,6 @@ export default async function alertUnshippedOrders(container: MedusaContainer) {
 
 export const config = {
   name: "alert-unshipped-orders",
-  // daily at 07:00
-  schedule: "0 7 * * *",
+  // daily 05:00 UTC = 07:00 Amsterdam in summer, 06:00 in winter (Railway cron runs UTC)
+  schedule: "0 5 * * *",
 }
