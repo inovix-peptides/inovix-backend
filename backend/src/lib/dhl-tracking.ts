@@ -23,7 +23,7 @@ export type DhlRawShipment = {
 
 export type TrackingPhase = "aangemeld" | "onderweg" | "bezorgd" | "onbekend"
 
-export type TrackingEventView = { at: string; title: string }
+export type TrackingEventView = { at: string; title: string; code: string | null }
 
 export type TrackingView = {
   phase: TrackingPhase
@@ -80,7 +80,7 @@ export function mapDhlTracking(raw: DhlRawShipment | null | undefined): Tracking
   const rawEvents = raw?.events ?? []
   const events: TrackingEventView[] = rawEvents
     .filter((e): e is DhlRawEvent & { timestamp: string } => Boolean(e?.timestamp))
-    .map((e) => ({ at: e.timestamp, title: eventTitle(e.status) }))
+    .map((e) => ({ at: e.timestamp, title: eventTitle(e.status), code: e.status ?? null }))
     .sort((a, b) => eventMs(b.at) - eventMs(a.at))
 
   const categories = new Set(

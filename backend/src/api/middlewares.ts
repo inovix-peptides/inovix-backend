@@ -1,4 +1,4 @@
-import { defineMiddlewares } from "@medusajs/framework/http"
+import { authenticate, defineMiddlewares } from "@medusajs/framework/http"
 
 import { friendlyErrorHandler } from "../lib/friendly-error-handler"
 import { passwordChangedNotifier } from "../lib/password-changed-notifier"
@@ -51,6 +51,13 @@ export default defineMiddlewares({
           max: 120,
         }),
       ],
+    },
+    {
+      // Live parcel tracking for the account order page: customers only, and
+      // the route itself re-checks the order belongs to the caller.
+      matcher: "/store/orders/:id/dhl-tracking",
+      method: ["GET"],
+      middlewares: [authenticate("customer", ["session", "bearer"])],
     },
   ],
 })
