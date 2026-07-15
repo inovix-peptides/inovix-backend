@@ -13,11 +13,11 @@ export const findCommand: CommandHandler = async ({ container, args }) => {
     fields: ['id', 'title', 'status', 'variants.sku', 'variants.title'],
   })
   const hits = ((data ?? []) as Prod[]).filter((p) =>
-    `${p.title} ${(p.variants ?? []).map((v) => v.sku).join(' ')}`.toLowerCase().includes(search)
+    `${p.title} ${(p.variants ?? []).map((v) => v?.sku).join(' ')}`.toLowerCase().includes(search)
   ).slice(0, 10)
   if (!hits.length) return `No products match "${escapeHtml(search)}".`
   const lines = hits.map((p) => {
-    const variants = (p.variants ?? []).map((v) => v.title || v.sku).filter(Boolean).join(', ')
+    const variants = (p.variants ?? []).map((v) => v?.title || v?.sku).filter(Boolean).join(', ')
     return `${escapeHtml(p.title)} [${p.status}]${variants ? ` | ${escapeHtml(variants)}` : ''}`
   })
   return [`<b>Products | ${escapeHtml(search)}</b>`, '', ...lines, '', 'Stock: /stock &lt;term&gt;'].join('\n')

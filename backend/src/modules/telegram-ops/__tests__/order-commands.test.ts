@@ -35,6 +35,10 @@ describe('deriveStatus', () => {
     const o = rawOrder({ payment_collections: [{ status: 'pending', captured_amount: 0 }] })
     expect(deriveStatus(o as any).paid).toBe(false)
   })
+  it('tolerates null elements inside relation arrays (live query.graph shape)', () => {
+    const o = rawOrder({ fulfillments: [null, { packed_at: 'x', shipped_at: null, canceled_at: null }] })
+    expect(deriveStatus(o as any)).toEqual({ paid: true, hasLabel: true, shipped: false, canceled: false })
+  })
 })
 
 describe('command handlers', () => {
@@ -52,6 +56,15 @@ describe('command handlers', () => {
     expect(reply).toContain('#28412')
     expect(reply).toContain('€89.90')
     expect(reply).toContain('✅')
+  })
+
+  it('/orders survives null elements in items and fulfillments (prod regression)', async () => {
+    graph.mockResolvedValue({
+      data: [rawOrder({ items: [null, { quantity: 2 }], fulfillments: [null] })],
+    })
+    const reply = await COMMANDS.orders({ container, svc, chatId: '1', args: [] })
+    expect(reply).toContain('#28412')
+    expect(reply).toContain('2 items')
   })
 
   it('/order requires a number', async () => {

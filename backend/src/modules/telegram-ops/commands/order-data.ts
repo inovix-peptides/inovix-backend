@@ -27,11 +27,13 @@ export const ORDER_LIST_FIELDS = [
 export function deriveStatus(o: RawOrder): GlyphInput {
   const pc = o.payment_collections?.[0]
   const paid = pc?.status === 'completed' || Number(pc?.captured_amount ?? 0) > 0
-  const active = (o.fulfillments ?? []).filter((f) => !f.canceled_at)
+  // query.graph can return null elements inside relation arrays for orders
+  // where the linked row is absent; guard every element access.
+  const active = (o.fulfillments ?? []).filter((f) => !!f && !f.canceled_at)
   return {
     paid,
-    hasLabel: active.some((f) => f.packed_at),
-    shipped: active.some((f) => f.shipped_at),
+    hasLabel: active.some((f) => f?.packed_at),
+    shipped: active.some((f) => f?.shipped_at),
     canceled: Boolean(o.canceled_at),
   }
 }

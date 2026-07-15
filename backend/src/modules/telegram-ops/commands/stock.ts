@@ -19,8 +19,8 @@ export const stockCommand: CommandHandler = async ({ container, args }) => {
   const rows = ((data ?? []) as InvItem[])
     .filter((i) => !search || `${i.sku ?? ''} ${i.title ?? ''}`.toLowerCase().includes(search))
     .map((i) => {
-      const stocked = (i.location_levels ?? []).reduce((n, l) => n + Number(l.stocked_quantity ?? 0), 0)
-      const reserved = (i.location_levels ?? []).reduce((n, l) => n + Number(l.reserved_quantity ?? 0), 0)
+      const stocked = (i.location_levels ?? []).reduce((n, l) => n + Number(l?.stocked_quantity ?? 0), 0)
+      const reserved = (i.location_levels ?? []).reduce((n, l) => n + Number(l?.reserved_quantity ?? 0), 0)
       return { name: i.title || i.sku || i.id, stocked, reserved, available: stocked - reserved }
     })
     .sort((a, b) => a.available - b.available)

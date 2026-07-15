@@ -82,7 +82,7 @@ export const salesCommand: CommandHandler = async ({ container, args }) => {
     pagination: { take: SALES_SCAN_TAKE, skip: 0, order: { created_at: 'DESC' } },
   })
   const orders = ((data ?? []) as SalesOrder[])
-    .filter((o) => new Date(o.created_at) >= prevStart)
+    .filter((o) => !!o && new Date(o.created_at) >= prevStart)
     .filter((o) => !o.canceled_at && isPaid(o))
   const inPeriod = orders.filter((o) => new Date(o.created_at) >= start)
   const inPrev = orders.filter((o) => new Date(o.created_at) < start)

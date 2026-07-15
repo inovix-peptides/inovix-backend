@@ -28,10 +28,12 @@ export const orderDetailCommand: CommandHandler = async ({ container, args }) =>
   const st = deriveStatus(o)
   const addr = o.shipping_address
   const name = [addr?.first_name, addr?.last_name].filter(Boolean).join(' ')
-  const items = (o.items ?? []).map((i) => `  ${i.quantity}x ${escapeHtml(i.title ?? '?')} (${eur(i.unit_price)})`)
+  const items = (o.items ?? [])
+    .filter((i) => !!i)
+    .map((i) => `  ${i?.quantity ?? '?'}x ${escapeHtml(i?.title ?? '?')} (${eur(i?.unit_price)})`)
   const tracking = (o.fulfillments ?? [])
-    .flatMap((f) => f.labels ?? [])
-    .map((l) => l.tracking_url ? `<a href="${escapeHtml(l.tracking_url)}">${escapeHtml(l.tracking_number ?? 'track')}</a>` : escapeHtml(l.tracking_number ?? ''))
+    .flatMap((f) => f?.labels ?? [])
+    .map((l) => l?.tracking_url ? `<a href="${escapeHtml(l.tracking_url)}">${escapeHtml(l.tracking_number ?? 'track')}</a>` : escapeHtml(l?.tracking_number ?? ''))
     .filter(Boolean)
 
   return [
