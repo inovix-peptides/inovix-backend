@@ -4,6 +4,8 @@ import { completeCartWorkflow } from "@medusajs/medusa/core-flows"
 
 import { Sentry } from "../lib/instrument"
 import { BrokerClient } from "../modules/payment-via-broker/client"
+import { TELEGRAM_OPS_MODULE } from "../modules/telegram-ops"
+import type TelegramOpsService from "../modules/telegram-ops/service"
 import {
   BROKER_URL,
   BROKER_CLIENT_ID,
@@ -159,6 +161,18 @@ export default async function reconcileBrokerPayments(
         logger.info(
           `[reconcile-broker-payments] recovered paid-but-orphaned cart ${cartId} -> order ${orderId}`
         )
+
+        // Telegram ops notification (N11): advisory only, never fails the job.
+        try {
+          const tg = container.resolve(TELEGRAM_OPS_MODULE) as TelegramOpsService
+          void tg.notify(
+            `tg-rescued-${cartId}`,
+            "payment_rescued",
+            `🛟 <b>Rescued payment</b>\nCustomer paid but never returned to the site. Order created from cart ${cartId}.`
+          )
+        } catch {
+          /* advisory only */
+        }
       } else {
         logger.warn(
           `[reconcile-broker-payments] cart ${cartId} is paid but did not complete (likely inventory/validation); will retry next tick`
