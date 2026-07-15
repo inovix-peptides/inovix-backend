@@ -5,6 +5,9 @@ import { helpText } from './help'
 import { ordersCommand } from './orders'
 import { orderDetailCommand } from './order-detail'
 import { todoCommand } from './todo'
+import { stockCommand } from './stock'
+import { findCommand } from './find'
+import { salesCommand } from './sales'
 
 export type TelegramUpdate = {
   message?: {
@@ -39,7 +42,9 @@ export const COMMANDS: Record<string, CommandHandler> = {
   orders: ordersCommand,
   order: orderDetailCommand,
   todo: todoCommand,
-  // Task 6 registers: stock, find, sales
+  stock: stockCommand,
+  find: findCommand,
+  sales: salesCommand,
 }
 
 export async function handleUpdate(container: MedusaContainer, update: TelegramUpdate): Promise<void> {
