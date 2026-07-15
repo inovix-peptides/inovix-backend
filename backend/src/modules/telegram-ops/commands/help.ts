@@ -12,6 +12,7 @@ export function helpText(): string {
     '/sales [today|week|month] | revenue',
     '/top [week|month] | best sellers',
     '/customer &lt;email or name&gt; | order history + lifetime value',
+    '/visitors [today|week] | Umami visitor stats',
     '/digest | the daily digest on demand',
     '/status | site + deploys + errors + todo',
     '/log [n] | recent bot actions',

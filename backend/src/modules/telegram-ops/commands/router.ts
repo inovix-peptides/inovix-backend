@@ -15,6 +15,7 @@ import { digestCommand } from './digest'
 import { statusCommand } from './status'
 import { topCommand } from './top'
 import { customerCommand } from './customer'
+import { visitorsCommand } from './visitors'
 import { CallbackQuery, handleCallback } from './callbacks'
 import { CommandReply, normalizeReply } from './reply'
 import '../actions' // registers lbl/lblo/shp/shpc/rst into CALLBACKS
@@ -66,6 +67,7 @@ export const COMMANDS: Record<string, CommandHandler> = {
   status: statusCommand,
   top: topCommand,
   customer: customerCommand,
+  visitors: visitorsCommand,
 }
 
 export async function handleUpdate(container: MedusaContainer, update: TelegramUpdate): Promise<void> {

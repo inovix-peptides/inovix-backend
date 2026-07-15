@@ -9,6 +9,7 @@ import { escapeHtml, eur, whenAms } from '../format'
 import { orderTotal, type RawOrder } from './order-data'
 import { periodBounds } from './sales'
 import { aggregateTopItems, type TopOrder } from './top'
+import { fetchUmamiStats } from './umami'
 
 export function lowStockThreshold(): number {
   const n = parseInt(process.env.OPS_LOW_STOCK_THRESHOLD ?? '', 10)
@@ -62,10 +63,22 @@ async function lowStockLines(container: MedusaContainer): Promise<LowStockLine[]
     .sort((a, b) => a.available - b.available)
 }
 
-// N16 content. Degrades line by line (visitors are phase 5); never throws
+// Visitor line for the digests: real Umami numbers when configured, a plain
+// n/a otherwise (fetchUmamiStats already swallows every failure into null).
+async function visitorsLine(period: 'today' | 'week', now: Date): Promise<string> {
+  const { start } = periodBounds(period, now)
+  const stats = await fetchUmamiStats({ startAt: start.getTime(), endAt: now.getTime() })
+  return stats ? `Visitors: ${stats.visitors} | ${stats.pageviews} pageviews` : 'Visitors: n/a'
+}
+
+// N16 content. Degrades line by line (visitors fall back to n/a); never throws
 // partial content into the caller | callers wrap in try/catch anyway.
 export async function buildDigest(container: MedusaContainer, now: Date): Promise<string> {
-  const [orders, lowStock] = await Promise.all([scanOrders(container), lowStockLines(container)])
+  const [orders, lowStock, visitors] = await Promise.all([
+    scanOrders(container),
+    lowStockLines(container),
+    visitorsLine('today', now),
+  ])
   const { start } = periodBounds('today', now)
   const active = orders.filter((o) => !o.canceled_at && isPaid(o))
   const today = active.filter((o) => new Date(o.created_at) >= start)
@@ -78,13 +91,13 @@ export async function buildDigest(container: MedusaContainer, now: Date): Promis
     ...(lowStock.length
       ? [`⚠️ Low stock: ${lowStock.map((l) => `${escapeHtml(l.name)} (${l.available})`).join(', ')}`]
       : ['Stock: all above threshold']),
-    'Visitors: n/a (Umami is phase 5)',
+    visitors,
   ].join('\n')
 }
 
 // N17 content: this week vs last week + top products of the week.
 export async function buildWeekly(container: MedusaContainer, now: Date): Promise<string> {
-  const orders = await scanOrders(container)
+  const [orders, visitors] = await Promise.all([scanOrders(container), visitorsLine('week', now)])
   const { start, prevStart } = periodBounds('week', now)
   const active = orders.filter((o) => !o.canceled_at && isPaid(o))
   const thisWeek = active.filter((o) => new Date(o.created_at) >= start)
@@ -99,6 +112,6 @@ export async function buildWeekly(container: MedusaContainer, now: Date): Promis
     `Last week: ${eur(prev)} | ${lastWeek.length} orders`,
     ...(top.length ? ['', '<b>Top products</b>', ...top.map((t, i) => `${i + 1}. ${escapeHtml(t.title)} | ${t.qty}x | ${eur(t.revenue)}`)] : []),
     '',
-    'Visitors: n/a (Umami is phase 5)',
+    visitors,
   ].join('\n')
 }

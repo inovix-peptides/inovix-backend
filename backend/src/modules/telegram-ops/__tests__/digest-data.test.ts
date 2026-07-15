@@ -1,4 +1,20 @@
 import { buildDigest, buildWeekly, lowStockThreshold } from '../commands/digest-data'
+import { fetchUmamiStats } from '../commands/umami'
+
+// Unconfigured Umami by default (fetchUmamiStats resolves null), so the
+// "Visitors: n/a" assertions below keep testing the real degrade path.
+jest.mock('../commands/umami', () => ({
+  umamiConfig: jest.fn(() => null),
+  fetchUmamiStats: jest.fn(async () => null),
+  fetchTopPages: jest.fn(async () => null),
+}))
+
+const umamiStatsMock = fetchUmamiStats as jest.Mock
+
+beforeEach(() => {
+  jest.clearAllMocks()
+  umamiStatsMock.mockResolvedValue(null)
+})
 
 const NOW = new Date('2026-07-15T16:00:00Z') // Wed 18:00 Amsterdam
 
@@ -74,6 +90,17 @@ describe('buildDigest', () => {
     const text = await buildDigest(makeContainer([], []) as never, NOW)
     expect(text).toContain('€0.00')
     expect(text).toContain('0 orders')
+    expect(text).toContain('Visitors: n/a')
+  })
+
+  it('shows real visitor numbers when Umami answers, over the today range', async () => {
+    umamiStatsMock.mockResolvedValue({ visitors: 123, pageviews: 456 })
+    const text = await buildDigest(makeContainer([], []) as never, NOW)
+    expect(text).toContain('Visitors: 123 | 456 pageviews')
+    expect(text).not.toContain('n/a')
+    const [range] = umamiStatsMock.mock.calls[0]
+    expect(range.startAt).toBe(new Date('2026-07-14T22:00:00Z').getTime()) // Ams midnight
+    expect(range.endAt).toBe(NOW.getTime())
   })
 })
 
@@ -91,5 +118,16 @@ describe('buildWeekly', () => {
     expect(text).toContain('€80.00')
     expect(text).toContain('BPC-157 10mg')
     expect(text.indexOf('BPC-157 10mg')).toBeLessThan(text.indexOf('TB-500 5mg'))
+    expect(text).toContain('Visitors: n/a')
+  })
+
+  it('shows real visitor numbers when Umami answers, over the week range', async () => {
+    umamiStatsMock.mockResolvedValue({ visitors: 900, pageviews: 2500 })
+    const text = await buildWeekly(makeContainer([], []) as never, NOW)
+    expect(text).toContain('Visitors: 900 | 2500 pageviews')
+    expect(text).not.toContain('n/a')
+    const [range] = umamiStatsMock.mock.calls[0]
+    expect(range.startAt).toBe(new Date('2026-07-12T22:00:00Z').getTime()) // Mon 13 Jul 00:00 CEST
+    expect(range.endAt).toBe(NOW.getTime())
   })
 })
