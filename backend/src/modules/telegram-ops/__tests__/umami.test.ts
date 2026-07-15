@@ -131,7 +131,7 @@ describe('fetchTopPages', () => {
     expect(await fetchTopPages(RANGE)).toBeNull()
   })
 
-  it('calls the url metrics endpoint and maps + limits rows', async () => {
+  it('calls the path metrics endpoint (Umami v3) and maps + limits rows', async () => {
     setEnv()
     const rows = [
       { x: '/', y: 40 },
@@ -152,9 +152,23 @@ describe('fetchTopPages', () => {
     ])
     const [url, init] = fetchMock.mock.calls[0] as unknown as [string, RequestInit]
     expect(url).toBe(
-      `https://umami.example.app/api/websites/site-uuid-1/metrics?type=url&startAt=${RANGE.startAt}&endAt=${RANGE.endAt}`
+      `https://umami.example.app/api/websites/site-uuid-1/metrics?type=path&startAt=${RANGE.startAt}&endAt=${RANGE.endAt}`
     )
     expect((init.headers as Record<string, string>).Authorization).toBe('Bearer api_token_123')
+    expect(fetchMock).toHaveBeenCalledTimes(1) // no fallback needed when path answers
+  })
+
+  it('falls back to type=url when type=path is rejected (Umami v2)', async () => {
+    setEnv()
+    const fetchMock = jest.fn(async (url: string) => {
+      if (String(url).includes('type=path')) return { ok: false, status: 400, json: async () => ({}) }
+      return { ok: true, json: async () => [{ x: '/legacy', y: 7 }] }
+    })
+    globalThis.fetch = fetchMock as never
+    expect(await fetchTopPages(RANGE)).toEqual([{ path: '/legacy', views: 7 }])
+    const urls = fetchMock.mock.calls.map((c) => String(c[0]))
+    expect(urls[0]).toContain('type=path')
+    expect(urls[1]).toContain('type=url')
   })
 
   it('respects a custom limit', async () => {

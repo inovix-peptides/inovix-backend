@@ -59,10 +59,17 @@ export async function fetchUmamiStats(range: UmamiRange): Promise<UmamiStats | n
 export async function fetchTopPages(range: UmamiRange, limit = 5): Promise<UmamiTopPage[] | null> {
   const cfg = umamiConfig()
   if (!cfg) return null
-  const body = await umamiGet(
-    `${cfg.url}/api/websites/${cfg.websiteId}/metrics?type=url&startAt=${range.startAt}&endAt=${range.endAt}`,
-    cfg.token
-  )
+  // Umami v3 renamed the metrics type from `url` to `path` (verified against
+  // the live instance: type=url answers 400 there). Try path first, fall back
+  // to url so an older v2 instance still works.
+  let body: unknown | null = null
+  for (const type of ['path', 'url']) {
+    body = await umamiGet(
+      `${cfg.url}/api/websites/${cfg.websiteId}/metrics?type=${type}&startAt=${range.startAt}&endAt=${range.endAt}`,
+      cfg.token
+    )
+    if (Array.isArray(body)) break
+  }
   if (!Array.isArray(body)) return null
   return (body as Array<{ x?: unknown; y?: unknown } | null>)
     .filter((r): r is { x?: unknown; y?: unknown } => !!r && typeof r.x === 'string')
