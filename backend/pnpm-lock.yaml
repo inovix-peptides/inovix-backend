@@ -146,6 +146,9 @@ importers:
       react-email:
         specifier: ^5.1.0
         version: 5.1.0
+      react-router-dom:
+        specifier: 6.20.1
+        version: 6.20.1(react-dom@18.3.1(react@18.3.1))(react@18.3.1)
       ts-node:
         specifier: ^10.9.2
         version: 10.9.2(@swc/core@1.5.7(@swc/helpers@0.5.17))(@types/node@20.19.25)(typescript@5.9.3)
