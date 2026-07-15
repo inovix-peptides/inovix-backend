@@ -107,4 +107,45 @@ describe('POST /webhooks/ops/railway/[secret]', () => {
     expect(res.statusCode).toBe(200)
     expect(notify).not.toHaveBeenCalled()
   })
+
+  // Current notification-rule payload (docs.railway.com/guides/webhooks):
+  // type "Deployment.<state>", status under details, names under resource.
+  const rulePayload = (type: string, status: string | undefined, id = 'dep_r1') => ({
+    type,
+    details: { id, source: 'GitHub', ...(status ? { status } : {}) },
+    resource: {
+      project: { id: 'p1', name: 'inovix-backend' },
+      environment: { id: 'e1', name: 'production' },
+      service: { id: 's1', name: 'backend-service' },
+      deployment: { id },
+    },
+    severity: 'WARNING',
+    timestamp: '2026-07-16T00:00:00.000Z',
+  })
+
+  it('notifies loudly on the notification-rule FAILED shape', async () => {
+    const res = makeRes()
+    await POST(makeReq(rulePayload('Deployment.failed', 'FAILED', 'dep_r9'), SECRET) as any, res)
+    expect(res.statusCode).toBe(200)
+    const [key, kind, text] = notify.mock.calls[0]
+    expect(key).toBe('tg-rw-dep_r9-FAILED')
+    expect(kind).toBe('ops_deploy')
+    expect(text).toContain('❌')
+    expect(text).toContain('backend-service')
+  })
+
+  it('derives the status from the type suffix when details.status is absent', async () => {
+    const res = makeRes()
+    await POST(makeReq(rulePayload('Deployment.crashed', undefined, 'dep_r2'), SECRET) as any, res)
+    expect(notify.mock.calls[0][0]).toBe('tg-rw-dep_r2-CRASHED')
+    expect(notify.mock.calls[0][2]).toContain('❌')
+  })
+
+  it('maps Deployment.succeeded to the quiet SUCCESS one-liner', async () => {
+    const res = makeRes()
+    await POST(makeReq(rulePayload('Deployment.succeeded', undefined, 'dep_r3'), SECRET) as any, res)
+    const [key, , text] = notify.mock.calls[0]
+    expect(key).toBe('tg-rw-dep_r3-SUCCESS')
+    expect(text).toContain('✅ Railway deploy ok')
+  })
 })
