@@ -29,6 +29,9 @@ import {
   MINIO_PUBLIC_URL,
   MEILISEARCH_HOST,
   MEILISEARCH_ADMIN_KEY,
+  TELEGRAM_BOT_TOKEN,
+  TELEGRAM_WEBHOOK_SECRET,
+  TELEGRAM_ALLOWED_CHAT_IDS,
 } from 'lib/constants';
 
 loadEnv(process.env.NODE_ENV, process.cwd());
@@ -175,6 +178,15 @@ const medusaConfig = {
     {
       key: 'dhl_parcel_settings',
       resolve: './src/modules/dhl-parcel-settings',
+    },
+    {
+      key: 'telegram_ops',
+      resolve: './src/modules/telegram-ops',
+      options: {
+        botToken: TELEGRAM_BOT_TOKEN,
+        webhookSecret: TELEGRAM_WEBHOOK_SECRET,
+        allowedChatIds: TELEGRAM_ALLOWED_CHAT_IDS,
+      },
     },
   ],
   plugins: [

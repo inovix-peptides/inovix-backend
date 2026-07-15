@@ -148,3 +148,12 @@ export const DHL_PARCEL_SHIPPER = {
   phone: process.env.DHL_PARCEL_SHIPPER_PHONE ?? '',
   email: process.env.DHL_PARCEL_SHIPPER_EMAIL ?? '',
 } as const
+
+/**
+ * Telegram ops bot | operator notifications + slash commands over the
+ * Telegram Bot API. Unconfigured (no token / empty allowlist) is a safe
+ * no-op; see src/modules/telegram-ops.
+ */
+export const TELEGRAM_BOT_TOKEN = process.env.TELEGRAM_BOT_TOKEN;
+export const TELEGRAM_WEBHOOK_SECRET = process.env.TELEGRAM_WEBHOOK_SECRET;
+export const TELEGRAM_ALLOWED_CHAT_IDS = process.env.TELEGRAM_ALLOWED_CHAT_IDS;

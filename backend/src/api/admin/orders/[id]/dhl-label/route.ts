@@ -8,6 +8,9 @@ import {
   hasOverride,
   parseChecklist,
 } from "../../../../../admin/widgets/order-fulfillment-checklist.logic"
+import { TELEGRAM_OPS_MODULE } from "../../../../../modules/telegram-ops"
+import type TelegramOpsService from "../../../../../modules/telegram-ops/service"
+import { headline, line } from "../../../../../modules/telegram-ops/format"
 
 // Fields loaded via query.graph to give the workflow everything it reads.
 //
@@ -93,6 +96,23 @@ export async function POST(
   if (existing) {
     const d: any = existing.data ?? {}
     const l: any = existing.labels?.[0] ?? {}
+
+    // Telegram ops notification (N5): advisory only, never fails the request.
+    try {
+      const tg = req.scope.resolve(TELEGRAM_OPS_MODULE) as TelegramOpsService
+      const trackerCode: string | null = d.dhl_tracking_number ?? l.tracking_number ?? null
+      void tg.notify(
+        `tg-label-${existing.id}`,
+        "label_created",
+        [
+          headline("📦", `Label ready #${raw.display_id}`),
+          ...(trackerCode ? [line("Tracking", trackerCode)] : []),
+        ].join("\n")
+      ).catch(() => {}) // advisory: swallow async failures; send-level failures are logged inside the service
+    } catch {
+      /* advisory only */
+    }
+
     logger.info(
       `admin.dhl-label: order ${orderId} already has fulfillment ${existing.id}; returning existing label (no second label bought)`
     )
@@ -180,6 +200,21 @@ export async function POST(
     logger.info(
       `admin.dhl-label: created fulfillment ${result.fulfillment_id} for order ${orderId} | tracking=${tracking_number}`
     )
+
+    // Telegram ops notification (N5): advisory only, never fails the request.
+    try {
+      const tg = req.scope.resolve(TELEGRAM_OPS_MODULE) as TelegramOpsService
+      void tg.notify(
+        `tg-label-${result.fulfillment_id}`,
+        "label_created",
+        [
+          headline("📦", `Label ready #${order.display_id}`),
+          ...(tracking_number ? [line("Tracking", tracking_number)] : []),
+        ].join("\n")
+      ).catch(() => {})
+    } catch {
+      /* advisory only */
+    }
 
     res.status(201).json({
       fulfillment_id: result.fulfillment_id,
