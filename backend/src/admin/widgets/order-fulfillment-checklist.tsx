@@ -61,6 +61,23 @@ type ChecklistLineItem = {
   } | null
 }
 
+type TrackingEventView = { at: string; title: string }
+
+type TrackingView = {
+  phase: "aangemeld" | "onderweg" | "bezorgd" | "onbekend"
+  phase_label: string
+  delivered_at: string | null
+  last_event_at: string | null
+  handed_to_dhl: boolean
+  events: TrackingEventView[]
+}
+
+type TrackingResponse = {
+  tracking: TrackingView | null
+  tracking_number: string | null
+  tracking_url: string | null
+}
+
 type FetchedOrder = {
   id: string
   metadata?: Record<string, unknown> | null
@@ -300,6 +317,7 @@ const OrderFulfillmentChecklistWidget = ({
 
   const [order, setOrder] = useState<FetchedOrder | null>(null)
   const [paymentView, setPaymentView] = useState<PaymentView | null>(null)
+  const [trackingRes, setTrackingRes] = useState<TrackingResponse | null>(null)
   const [checklist, setChecklist] = useState<ChecklistState | null>(null)
   const [loading, setLoading] = useState(true)
   const [fetchError, setFetchError] = useState<string | null>(null)
@@ -310,15 +328,16 @@ const OrderFulfillmentChecklistWidget = ({
   const [shipOpen, setShipOpen] = useState(false)
   const [overrideStep, setOverrideStep] = useState<ChecklistOverrideStep | null>(null)
 
-  async function loadAll() {
-    setLoading(true)
+  async function loadAll(quiet = false) {
+    if (!quiet) setLoading(true)
     setFetchError(null)
     try {
-      const [orderRes, paymentRes] = await Promise.all([
+      const [orderRes, paymentRes, trackRes] = await Promise.all([
         fetch(`/admin/orders/${orderId}?fields=${ORDER_FIELDS}`, {
           credentials: "include",
         }),
         fetch(`/admin/orders/${orderId}/payment`, { credentials: "include" }),
+        fetch(`/admin/orders/${orderId}/dhl-tracking`, { credentials: "include" }),
       ])
       if (!orderRes.ok) throw new Error(`Laden mislukt (${orderRes.status})`)
       const orderJson = (await orderRes.json()) as { order?: FetchedOrder }
@@ -332,6 +351,9 @@ const OrderFulfillmentChecklistWidget = ({
       } else {
         setPaymentView(null)
       }
+      if (trackRes.ok) {
+        setTrackingRes((await trackRes.json()) as TrackingResponse)
+      }
     } catch (err) {
       setFetchError(err instanceof Error ? err.message : "Onbekende fout")
     } finally {
@@ -341,6 +363,8 @@ const OrderFulfillmentChecklistWidget = ({
 
   useEffect(() => {
     void loadAll()
+    const timer = setInterval(() => void loadAll(true), 60_000)
+    return () => clearInterval(timer)
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [orderId])
 
@@ -702,8 +726,10 @@ const OrderFulfillmentChecklistWidget = ({
           ) : (
             <div className="flex flex-col gap-2">
               <Text size="small" className="text-ui-fg-subtle">
-                Klik zodra je het pakket bij DHL afgeeft. De klant krijgt dan
-                automatisch de track-and-trace mail.
+                Geef het pakket af bij DHL. Zodra DHL het pakket scant wordt
+                deze stap automatisch afgerond en krijgt de klant de
+                track-and-trace mail (controle elke 30 minuten). Handmatig
+                markeren kan ook:
               </Text>
               <div>
                 <Button
@@ -725,6 +751,66 @@ const OrderFulfillmentChecklistWidget = ({
             </div>
           )}
         </StepRow>
+
+        {/* Live shipment status from DHL (feature: live tracking) */}
+        {hasLabel ? (
+          <div className="px-6 py-4">
+            <div className="flex items-center gap-2">
+              <Text size="small" weight="plus">
+                Zending
+              </Text>
+              <span
+                className="px-2 py-0.5 text-[10px] uppercase tracking-wider"
+                style={
+                  trackingRes?.tracking?.phase === "bezorgd"
+                    ? { border: "1px solid #86efac", background: "#f0fdf4", color: "#166534" }
+                    : trackingRes?.tracking?.phase === "onderweg"
+                      ? { border: "1px solid #7dd3fc", background: "#f0f9ff", color: "#075985" }
+                      : { border: "1px solid #e5e7eb", background: "#f9fafb", color: "#6b7280" }
+                }
+              >
+                {trackingRes?.tracking?.phase_label ?? "Nog geen scans"}
+              </span>
+              <Text size="xsmall" className="text-ui-fg-muted" style={{ marginLeft: "auto" }}>
+                live van DHL, ververst elke minuut
+              </Text>
+            </div>
+            {trackingRes?.tracking && trackingRes.tracking.events.length > 0 ? (
+              <div className="mt-2 flex flex-col gap-1">
+                {trackingRes.tracking.events.slice(0, 4).map((e, i) => (
+                  <div key={i} className="flex items-baseline justify-between gap-3">
+                    <Text size="xsmall" weight={i === 0 ? "plus" : undefined}>
+                      {e.title}
+                    </Text>
+                    <Text size="xsmall" className="text-ui-fg-subtle whitespace-nowrap">
+                      {new Date(e.at).toLocaleString("nl-NL", {
+                        day: "numeric",
+                        month: "short",
+                        hour: "2-digit",
+                        minute: "2-digit",
+                      })}
+                    </Text>
+                  </div>
+                ))}
+              </div>
+            ) : (
+              <Text size="xsmall" className="text-ui-fg-muted">
+                DHL heeft het pakket nog niet gescand. De status verschijnt hier
+                zodra het pakket is afgegeven.
+              </Text>
+            )}
+            {trackingRes?.tracking_url ? (
+              <a
+                href={trackingRes.tracking_url}
+                target="_blank"
+                rel="noopener noreferrer"
+                className="txt-small text-ui-fg-interactive hover:underline"
+              >
+                Bekijk bij DHL
+              </a>
+            ) : null}
+          </div>
+        ) : null}
 
         {/* Audit log (only when there is something to show) */}
         {checklist.overrides.length > 0 ? (
