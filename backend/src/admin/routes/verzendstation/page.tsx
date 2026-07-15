@@ -30,7 +30,7 @@ const REFRESH_MS = 60_000
 function OrderRow({ entry, ageLabel }: { entry: QueueEntry; ageLabel: string }) {
   return (
     <Link
-      to={`/orders/${entry.id}`}
+      to={`/verzendstation/${entry.id}`}
       className="block border border-ui-border-base bg-ui-bg-base px-4 py-3 hover:bg-ui-bg-base-hover"
       style={{ textDecoration: "none" }}
     >
@@ -129,7 +129,7 @@ const VerzendstationPage = () => {
             <Heading level="h1">Verzendstation</Heading>
             <Text size="small" className="text-ui-fg-subtle">
               Alle bestellingen die actie nodig hebben. Klik op een bestelling en
-              volg de verzendchecklist bovenaan de pagina. Ververst elke minuut.
+              volg de verzendchecklist. Ververst elke minuut.
             </Text>
           </div>
           {error ? (
