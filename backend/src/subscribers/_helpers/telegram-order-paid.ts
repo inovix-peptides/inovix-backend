@@ -42,6 +42,8 @@ export async function notifyOrderPaidOnTelegram(container: MedusaContainer, orde
     ].join('\n')
     await svc.notify(`tg-order-${order.id}`, 'order_paid', text)
   } catch (e) {
+    const logger = container.resolve('logger')
+    logger.error(`telegram-order-paid: failed for order ${orderId}: ${(e as Error).message}`)
     Sentry.captureException(e, { tags: { subscriber: 'telegram-order-paid' }, extra: { orderId } })
   }
 }

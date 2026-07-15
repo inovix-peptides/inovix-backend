@@ -31,6 +31,8 @@ export default async function tgOrderCanceledHandler({
     const text = headline('❌', `Order #${order.display_id} canceled`)
     await svc.notify(`tg-cancel-${order.id}`, 'order_canceled', text)
   } catch (e) {
+    const logger = container.resolve('logger')
+    logger.error(`tg-order-canceled: failed for order ${orderId}: ${(e as Error).message}`)
     Sentry.captureException(e, { tags: { subscriber: 'tg-order-canceled' }, extra: { orderId } })
   }
 }

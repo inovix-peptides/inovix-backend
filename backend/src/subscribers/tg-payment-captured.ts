@@ -1,5 +1,7 @@
 import { ContainerRegistrationKeys } from '@medusajs/framework/utils'
 import { SubscriberArgs, SubscriberConfig } from '@medusajs/medusa'
+import { TELEGRAM_OPS_MODULE } from '../modules/telegram-ops'
+import type TelegramOpsService from '../modules/telegram-ops/service'
 import { Sentry } from '../lib/instrument'
 import { notifyOrderPaidOnTelegram } from './_helpers/telegram-order-paid'
 
@@ -12,6 +14,9 @@ export default async function tgPaymentCapturedHandler({
 }: SubscriberArgs<{ id: string }>) {
   const paymentId = data.id
   try {
+    const svc = container.resolve(TELEGRAM_OPS_MODULE) as TelegramOpsService
+    if (!svc.isConfigured()) return
+
     const query = container.resolve(ContainerRegistrationKeys.QUERY)
     const { data: payments } = await query.graph({
       entity: 'payment',
@@ -22,6 +27,8 @@ export default async function tgPaymentCapturedHandler({
     if (!orderId) return
     await notifyOrderPaidOnTelegram(container, orderId)
   } catch (e) {
+    const logger = container.resolve('logger')
+    logger.error(`tg-payment-captured: failed for payment ${paymentId}: ${(e as Error).message}`)
     Sentry.captureException(e, { tags: { subscriber: 'tg-payment-captured' }, extra: { paymentId } })
   }
 }

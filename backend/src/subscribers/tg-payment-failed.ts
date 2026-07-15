@@ -18,7 +18,10 @@ export default async function tgPaymentFailedHandler({
   event: { data },
   container,
 }: SubscriberArgs<PaymentFailedData>) {
-  const dedupeId = data.transaction_id ?? data.session_id ?? 'unknown'
+  // Mirror the email subscriber's idempotency fallback: when both ids are
+  // absent, use a unique component so distinct failures still notify instead
+  // of collapsing onto one key and being silently skipped.
+  const dedupeId = data.transaction_id ?? data.session_id ?? `unknown-${Date.now()}`
   try {
     const svc = container.resolve(TELEGRAM_OPS_MODULE) as TelegramOpsService
     if (!svc.isConfigured()) return
@@ -29,6 +32,10 @@ export default async function tgPaymentFailedHandler({
     ].join('\n')
     await svc.notify(`tg-payfail-${dedupeId}`, 'payment_failed', text)
   } catch (e) {
+    const logger = container.resolve('logger')
+    logger.error(
+      `tg-payment-failed: failed for session ${data.session_id ?? 'unknown'}: ${(e as Error).message}`
+    )
     Sentry.captureException(e, {
       tags: { subscriber: 'tg-payment-failed' },
       extra: { sessionId: data.session_id, transactionId: data.transaction_id },

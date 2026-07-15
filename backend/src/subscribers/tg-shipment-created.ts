@@ -41,6 +41,8 @@ export default async function tgShipmentCreatedHandler({
     ].join('\n')
     await svc.notify(`tg-shipped-${fulfillmentId}`, 'shipment_created', text)
   } catch (e) {
+    const logger = container.resolve('logger')
+    logger.error(`tg-shipment-created: failed for fulfillment ${fulfillmentId}: ${(e as Error).message}`)
     Sentry.captureException(e, { tags: { subscriber: 'tg-shipment-created' }, extra: { fulfillmentId } })
   }
 }

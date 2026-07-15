@@ -62,6 +62,8 @@ export default async function tgOrderRefundedHandler({
     ].join('\n')
     await svc.notify(`tg-refund-${order.id}-${latestRefund.id}`, 'order_refunded', text)
   } catch (e) {
+    const logger = container.resolve('logger')
+    logger.error(`tg-order-refunded: failed for payment ${paymentId}: ${(e as Error).message}`)
     Sentry.captureException(e, { tags: { subscriber: 'tg-order-refunded' }, extra: { paymentId } })
   }
 }
