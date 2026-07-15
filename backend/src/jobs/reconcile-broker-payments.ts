@@ -169,7 +169,7 @@ export default async function reconcileBrokerPayments(
             `tg-rescued-${cartId}`,
             "payment_rescued",
             `🛟 <b>Rescued payment</b>\nCustomer paid but never returned to the site. Order created from cart ${cartId}.`
-          )
+          ).catch(() => {})
         } catch {
           /* advisory only */
         }

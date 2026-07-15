@@ -108,7 +108,7 @@ export async function POST(
           headline("📦", `Label ready #${raw.display_id}`),
           ...(trackerCode ? [line("Tracking", trackerCode)] : []),
         ].join("\n")
-      )
+      ).catch(() => {}) // advisory: swallow async failures, Sentry captures happen upstream where relevant
     } catch {
       /* advisory only */
     }
@@ -211,7 +211,7 @@ export async function POST(
           headline("📦", `Label ready #${order.display_id}`),
           ...(tracking_number ? [line("Tracking", tracking_number)] : []),
         ].join("\n")
-      )
+      ).catch(() => {})
     } catch {
       /* advisory only */
     }
