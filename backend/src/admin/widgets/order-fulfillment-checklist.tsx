@@ -715,6 +715,13 @@ const OrderFulfillmentChecklistWidget = ({
                   Markeer als verzonden &amp; mail klant
                 </Button>
               </div>
+              <Text size="xsmall" className="text-ui-fg-muted">
+                De Engelse knoppen elders op deze pagina heb je niet nodig:
+                &quot;Mark as shipped&quot; doet hetzelfde als deze knop (klant
+                krijgt dezelfde mail, nooit dubbel), &quot;Mark as
+                delivered&quot; registreert alleen een bezorgdatum en is
+                optioneel.
+              </Text>
             </div>
           )}
         </StepRow>
