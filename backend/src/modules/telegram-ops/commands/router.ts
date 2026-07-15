@@ -2,6 +2,9 @@ import type { MedusaContainer } from '@medusajs/framework/types'
 import type TelegramOpsService from '../service'
 import { TELEGRAM_OPS_MODULE } from '../index'
 import { helpText } from './help'
+import { ordersCommand } from './orders'
+import { orderDetailCommand } from './order-detail'
+import { todoCommand } from './todo'
 
 export type TelegramUpdate = {
   message?: {
@@ -33,7 +36,10 @@ export function parseCommand(text: string): { command: string; args: string[] } 
 export const COMMANDS: Record<string, CommandHandler> = {
   help: async () => helpText(),
   start: async () => helpText(),
-  // Tasks 5 and 6 register: todo, orders, order, stock, find, sales
+  orders: ordersCommand,
+  order: orderDetailCommand,
+  todo: todoCommand,
+  // Task 6 registers: stock, find, sales
 }
 
 export async function handleUpdate(container: MedusaContainer, update: TelegramUpdate): Promise<void> {
