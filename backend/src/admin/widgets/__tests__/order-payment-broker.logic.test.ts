@@ -1,6 +1,7 @@
 import {
   toAmount,
   computeRemainingRefundable,
+  normalizeBrokerPayment,
   validateRefundAmount,
   buildPaymentView,
   type RawMedusaPayment,
@@ -26,6 +27,58 @@ describe("toAmount", () => {
     expect(toAmount(undefined)).toBe(0)
     expect(toAmount({})).toBe(0)
     expect(toAmount("abc")).toBe(0)
+  })
+
+  it("reads the raw BigNumber {value, precision} shape query.graph returns", () => {
+    expect(toAmount({ value: "34.95", precision: 20 })).toBe(34.95)
+    expect(toAmount({ value: 34.95 })).toBe(34.95)
+  })
+})
+
+describe("normalizeBrokerPayment", () => {
+  // Regression for prod order_01KXBZVPHPJYMV8BQC8VDFH3GH: query.graph has NO
+  // captured_amount/refunded_amount fields on payment (they live on
+  // payment_collection; real captures/refunds are rows), and bigNumber
+  // columns can surface as {value, precision}. The view showed Bedrag 0,00
+  // and the checklist payment gate blocked a fully paid order.
+  it("computes captured/refunded from capture and refund rows and parses raw amounts", () => {
+    const payment: RawMedusaPayment = {
+      id: "pay_1",
+      amount: { value: "34.95", precision: 20 } as never,
+      raw_amount: { value: "34.95", precision: 20 } as never,
+      captured_at: "2026-07-12T20:21:22.981Z",
+      captures: [{ amount: { value: "34.95", precision: 20 } as never }],
+      refunds: [],
+    }
+    const n = normalizeBrokerPayment(payment)
+    expect(n.amount).toBe(34.95)
+    expect(n.captured_amount).toBe(34.95)
+    expect(n.refunded_amount).toBe(0)
+  })
+
+  it("sums multiple captures and refunds", () => {
+    const n = normalizeBrokerPayment({
+      id: "pay_2",
+      amount: 100,
+      captures: [{ amount: 60 }, { amount: "40" }],
+      refunds: [{ amount: 10 }, { amount: { value: "5" } as never }],
+    })
+    expect(n.captured_amount).toBe(100)
+    expect(n.refunded_amount).toBe(15)
+  })
+
+  it("keeps a larger pre-existing captured_amount and falls back to raw_amount", () => {
+    const n = normalizeBrokerPayment({
+      id: "pay_3",
+      amount: undefined,
+      raw_amount: { value: "20" } as never,
+      captured_amount: 20,
+      captures: [],
+      refunds: null,
+    })
+    expect(n.amount).toBe(20)
+    expect(n.captured_amount).toBe(20)
+    expect(n.refunded_amount).toBe(0)
   })
 })
 

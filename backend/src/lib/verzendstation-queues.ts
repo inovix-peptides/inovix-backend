@@ -9,6 +9,7 @@ import {
   hasOverride,
   parseChecklist,
 } from "../admin/widgets/order-fulfillment-checklist.logic"
+import { normalizeBrokerPayment } from "../admin/widgets/order-payment-broker.logic"
 
 const BROKER_PROVIDER_ID = "pp_via_broker_via_broker"
 
@@ -29,11 +30,15 @@ export const QUEUE_ORDER_FIELDS = [
   "fulfillments.packed_at",
   "fulfillments.shipped_at",
   "fulfillments.canceled_at",
+  // Payment has NO captured_amount/refunded_amount fields (query.graph
+  // returns undefined for unknown fields, silently). The real amounts are
+  // the capture/refund rows, summed via normalizeBrokerPayment.
   "payment_collections.payments.provider_id",
   "payment_collections.payments.amount",
-  "payment_collections.payments.captured_amount",
-  "payment_collections.payments.refunded_amount",
+  "payment_collections.payments.raw_amount",
   "payment_collections.payments.canceled_at",
+  "payment_collections.payments.captures.amount",
+  "payment_collections.payments.refunds.amount",
 ]
 
 export type QueueOrderRow = {
@@ -58,9 +63,10 @@ export type QueueOrderRow = {
     payments?: Array<{
       provider_id?: string | null
       amount?: unknown
-      captured_amount?: unknown
-      refunded_amount?: unknown
+      raw_amount?: unknown
       canceled_at?: string | Date | null
+      captures?: Array<{ amount?: unknown }> | null
+      refunds?: Array<{ amount?: unknown }> | null
     }> | null
   }> | null
 }
@@ -120,8 +126,9 @@ export function buildVerzendstationQueues(rows: QueueOrderRow[]): Verzendstation
       .flatMap((c) => c.payments ?? [])
       .find((p) => p?.provider_id === BROKER_PROVIDER_ID)
     const paymentOk =
-      evaluatePaymentGate((payment as never) ?? null).ok ||
-      hasOverride(parseChecklist(row.metadata), "payment")
+      evaluatePaymentGate(
+        payment ? normalizeBrokerPayment(payment as never) : null
+      ).ok || hasOverride(parseChecklist(row.metadata), "payment")
 
     if (active?.packed_at) {
       if (!paymentOk) continue

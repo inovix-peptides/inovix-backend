@@ -10,7 +10,11 @@ import {
   CF_KV_NAMESPACE_ID,
   CF_KV_API_TOKEN,
 } from "../../../../../lib/constants"
-import type { BrokerLive, RawMedusaPayment } from "../../../../../admin/widgets/order-payment-broker.logic"
+import {
+  normalizeBrokerPayment,
+  type BrokerLive,
+  type RawMedusaPayment,
+} from "../../../../../admin/widgets/order-payment-broker.logic"
 
 // The Medusa provider id for the broker payment provider
 // (pp_<config-id>_<identifier>). Payments created through any other provider
@@ -18,16 +22,22 @@ import type { BrokerLive, RawMedusaPayment } from "../../../../../admin/widgets/
 export const PROVIDER_ID = "pp_via_broker_via_broker"
 
 // The fields the GET/refund routes need off the order's broker payment.
+// NOTE: payment has NO captured_amount/refunded_amount fields (query.graph
+// silently returns undefined for unknown fields | that bug shipped as
+// "Bedrag 0,00" in the admin and a wrongly-blocked checklist payment gate).
+// The real sources are the capture/refund rows, summed by
+// normalizeBrokerPayment below.
 const PAYMENT_FIELDS = [
   "id",
   "provider_id",
   "currency_code",
   "amount",
-  "captured_amount",
-  "refunded_amount",
+  "raw_amount",
   "captured_at",
   "canceled_at",
   "data",
+  "captures.id",
+  "captures.amount",
   "refunds.id",
   "refunds.amount",
   "refunds.created_at",
@@ -70,7 +80,9 @@ export async function resolveBrokerPayment(
 
   for (const collection of order.payment_collections ?? []) {
     for (const payment of collection.payments ?? []) {
-      if (payment?.provider_id === PROVIDER_ID) return payment
+      if (payment?.provider_id === PROVIDER_ID) {
+        return normalizeBrokerPayment(payment)
+      }
     }
   }
   return null

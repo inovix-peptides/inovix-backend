@@ -3,12 +3,15 @@
 // runtime / React / Medusa UI imports. No I/O here | callers pass in the
 // already-fetched Medusa payment record and the (optional) live broker status.
 
-// A Medusa BigNumber value can surface as a number, a string, or a
-// { numeric } wrapper depending on where in the stack it was serialised.
+// A Medusa BigNumber value can surface as a number, a string, a { numeric }
+// wrapper, or the raw { value, precision } shape (what a direct query.graph
+// returns for bigNumber columns) depending on where in the stack it was
+// serialised.
 export type AmountLike =
   | number
   | string
   | { numeric?: number | string | null }
+  | { value?: number | string | null; precision?: number | null }
   | null
   | undefined
 
@@ -20,16 +23,23 @@ export type RawRefund = {
   refund_reason?: { label?: string | null } | null
 }
 
+export type RawCapture = {
+  id?: string | null
+  amount?: AmountLike
+}
+
 export type RawMedusaPayment = {
   id: string
   provider_id?: string | null
   currency_code?: string | null
   amount?: AmountLike
+  raw_amount?: AmountLike
   captured_amount?: AmountLike
   refunded_amount?: AmountLike
   captured_at?: string | Date | null
   canceled_at?: string | Date | null
   data?: { ref?: string | null } | null
+  captures?: RawCapture[] | null
   refunds?: RawRefund[] | null
 }
 
@@ -67,10 +77,38 @@ export function toAmount(value: AmountLike): number {
     const n = Number(value)
     return Number.isFinite(n) ? n : 0
   }
-  if (value && typeof value === "object" && "numeric" in value) {
-    return toAmount((value as { numeric?: number | string | null }).numeric ?? 0)
+  if (value && typeof value === "object") {
+    if ("numeric" in value) {
+      return toAmount((value as { numeric?: number | string | null }).numeric ?? 0)
+    }
+    if ("value" in value) {
+      return toAmount((value as { value?: number | string | null }).value ?? 0)
+    }
   }
   return 0
+}
+
+// query.graph has NO captured_amount/refunded_amount fields on payment (they
+// exist on payment_collection only; unknown fields come back undefined, not
+// as an error). The real sources are the capture and refund rows. This
+// normalizes a payment loaded with `captures.amount` + `refunds.amount` so
+// every consumer (payment view, DHL payment gate, Verzendstation queue) sees
+// plain-number amounts regardless of how BigNumber columns were serialized.
+export function normalizeBrokerPayment<T extends RawMedusaPayment>(payment: T): T {
+  const capturedFromRows = (payment.captures ?? []).reduce(
+    (sum, c) => sum + toAmount(c.amount),
+    0
+  )
+  const refundedFromRows = (payment.refunds ?? []).reduce(
+    (sum, r) => sum + toAmount(r.amount),
+    0
+  )
+  return {
+    ...payment,
+    amount: toAmount(payment.amount) || toAmount(payment.raw_amount),
+    captured_amount: Math.max(capturedFromRows, toAmount(payment.captured_amount)),
+    refunded_amount: Math.max(refundedFromRows, toAmount(payment.refunded_amount)),
+  }
 }
 
 function round2(n: number): number {

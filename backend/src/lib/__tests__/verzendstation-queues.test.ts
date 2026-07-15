@@ -9,7 +9,15 @@ const BROKER = "pp_via_broker_via_broker"
 function paidPayment() {
   return {
     payments: [
-      { provider_id: BROKER, amount: 100, captured_amount: 100, refunded_amount: 0, canceled_at: null },
+      // The real query.graph shape: bigNumber raw amounts + capture rows
+      // (payment has no captured_amount/refunded_amount fields).
+      {
+        provider_id: BROKER,
+        amount: { value: "100", precision: 20 },
+        canceled_at: null,
+        captures: [{ amount: { value: "100", precision: 20 } }],
+        refunds: [],
+      },
     ],
   }
 }
@@ -49,13 +57,13 @@ describe("buildVerzendstationQueues", () => {
     const unpaid = row({
       id: "o2",
       payment_collections: [
-        { payments: [{ provider_id: BROKER, amount: 100, captured_amount: 0, refunded_amount: 0, canceled_at: null }] },
+        { payments: [{ provider_id: BROKER, amount: 100, canceled_at: null, captures: [], refunds: [] }] },
       ],
     })
     const refunded = row({
       id: "o3",
       payment_collections: [
-        { payments: [{ provider_id: BROKER, amount: 100, captured_amount: 100, refunded_amount: 100, canceled_at: null }] },
+        { payments: [{ provider_id: BROKER, amount: 100, canceled_at: null, captures: [{ amount: 100 }], refunds: [{ amount: 100 }] }] },
       ],
     })
     const canceled = row({ id: "o4", status: "canceled" })
@@ -128,7 +136,7 @@ describe("buildVerzendstationQueues", () => {
       id: "o12",
       fulfillments: [{ id: "f9", packed_at: "2026-07-13T10:00:00.000Z", shipped_at: null, canceled_at: null }],
       payment_collections: [
-        { payments: [{ provider_id: BROKER, amount: 100, captured_amount: 100, refunded_amount: 100, canceled_at: null }] },
+        { payments: [{ provider_id: BROKER, amount: 100, canceled_at: null, captures: [{ amount: 100 }], refunds: [{ amount: 100 }] }] },
       ],
     })
     const q = buildVerzendstationQueues([refundedAfterPacking])
