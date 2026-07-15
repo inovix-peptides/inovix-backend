@@ -196,7 +196,7 @@ OrderShippedTemplate.PreviewProps = {
   labels: [
     {
       tracking_number: 'JVGL01234567890',
-      tracking_url: 'https://www.dhlecommerce.nl/nl/consumer/track-and-trace?key=JVGL01234567890+1011AB',
+      tracking_url: 'https://my.dhlecommerce.nl/home/tracktrace/JVGL01234567890/1011AB?lang=nl_NL',
       label_url: null,
     },
   ],

@@ -19,6 +19,7 @@ import {
 import { sumOrderWeightGrams } from "./box-selector"
 import { DhlParcelClient } from "./client"
 import { TokenCache } from "./token-cache"
+import { buildDhlConsumerTrackingUrl } from "../../lib/dhl-tracking"
 import {
   DhlParcelApiError,
   DhlParcelContact,
@@ -237,12 +238,13 @@ class DhlParcelFulfillmentProviderService extends AbstractFulfillmentProviderSer
     // 12. Tracking number.
     const trackingNumber = response.trackerCode
 
-    // 13. Tracking URL. DHL's consumer track-and-trace wants key=<barcode>+<postcode>,
-    //     but in a URL a literal `+` decodes to a SPACE, which breaks the lookup
-    //     (bit us on order 28417). Encode the plus as %2B and strip the postcode's
-    //     internal space ("3201 ME" -> "3201ME").
-    const compactPostcode = (shippingAddress.postal_code ?? "").replace(/\s+/g, "")
-    const trackingUrl = `https://www.dhlecommerce.nl/nl/consumer/track-and-trace?key=${trackingNumber}%2B${compactPostcode}`
+    // 13. Tracking URL: the my.dhlecommerce.nl consumer deep link (the old
+    //     www.dhlecommerce.nl ?key= pattern 404s since DHL's 2026 site
+    //     restructure; see buildDhlConsumerTrackingUrl).
+    const trackingUrl = buildDhlConsumerTrackingUrl(
+      trackingNumber,
+      shippingAddress.postal_code
+    )
 
     // 14. Label PDF as a data URI (R2 upload is a documented follow-up).
     const pdfBase64 = response.pdf ?? (await this.client.getLabelPdf(labelId))

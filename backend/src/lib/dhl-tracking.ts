@@ -134,3 +134,19 @@ export async function fetchDhlTracking(
     clearTimeout(timer)
   }
 }
+
+// The CONSUMER deep link (what customers and admins open in a browser).
+// Captured live from DHL's own site on 2026-07-15: the old
+// www.dhlecommerce.nl/...?key=<barcode>+<pc> pattern 404s since a site
+// restructure; the portal deep link below is what their search redirects to.
+export type DhlPortalLang = "nl_NL" | "de_DE" | "en_GB"
+
+export function buildDhlConsumerTrackingUrl(
+  barcode: string,
+  postcode: string | null | undefined,
+  lang: DhlPortalLang = "nl_NL"
+): string {
+  const compact = (postcode ?? "").replace(/\s+/g, "").toUpperCase()
+  const path = compact ? `${barcode}/${compact}` : barcode
+  return `https://my.dhlecommerce.nl/home/tracktrace/${path}?lang=${lang}`
+}

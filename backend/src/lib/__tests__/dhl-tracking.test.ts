@@ -82,3 +82,22 @@ describe("mapDhlTracking", () => {
     expect(mapDhlTracking({ events: [] }).events).toEqual([])
   })
 })
+
+describe("buildDhlConsumerTrackingUrl", () => {
+  const { buildDhlConsumerTrackingUrl } = require("../dhl-tracking")
+
+  it("builds the my.dhlecommerce.nl deep link with compacted postcode", () => {
+    expect(buildDhlConsumerTrackingUrl("JVGL0000000000000001", "3201 me")).toBe(
+      "https://my.dhlecommerce.nl/home/tracktrace/JVGL0000000000000001/3201ME?lang=nl_NL"
+    )
+  })
+
+  it("supports a language and works without a postcode", () => {
+    expect(buildDhlConsumerTrackingUrl("JVGL1", "1011AB", "en_GB")).toBe(
+      "https://my.dhlecommerce.nl/home/tracktrace/JVGL1/1011AB?lang=en_GB"
+    )
+    expect(buildDhlConsumerTrackingUrl("JVGL1", null)).toBe(
+      "https://my.dhlecommerce.nl/home/tracktrace/JVGL1?lang=nl_NL"
+    )
+  })
+})

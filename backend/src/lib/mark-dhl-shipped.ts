@@ -108,8 +108,10 @@ export async function markDhlOrderShipped(
     }
   }
 
-  // Idempotency-keyed: never double-sends, whichever path fires first.
-  await sendOrderShippedNotification(container, dhlFulfillment.id)
+  // Idempotency-keyed: never double-sends, whichever path fires first. The
+  // order id is passed so the helper never has to resolve the cross-module
+  // link itself.
+  await sendOrderShippedNotification(container, dhlFulfillment.id, { orderId })
 
   return { ok: true, fulfillment_id: dhlFulfillment.id, already_shipped: alreadyShipped }
 }

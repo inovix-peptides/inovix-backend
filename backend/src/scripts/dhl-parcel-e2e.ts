@@ -258,7 +258,7 @@ async function main(): Promise<void> {
     console.log(`Tracking number: ${trackingNumber}`)
     const postcode = "1011AC"
     console.log(
-      `Tracking URL:    https://www.dhlecommerce.nl/nl/consumer/track-and-trace?key=${trackingNumber}+${postcode}`,
+      `Tracking URL:    https://my.dhlecommerce.nl/home/tracktrace/${trackingNumber}/${postcode}?lang=nl_NL`,
     )
   }
 }

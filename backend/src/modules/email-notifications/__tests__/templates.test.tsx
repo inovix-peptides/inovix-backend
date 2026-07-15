@@ -127,7 +127,7 @@ describe('generateEmailTemplate', () => {
       labels: [
         {
           tracking_number: 'JVGL01234567890',
-          tracking_url: 'https://www.dhlecommerce.nl/nl/consumer/track-and-trace?key=JVGL01234567890+1011AB',
+          tracking_url: 'https://my.dhlecommerce.nl/home/tracktrace/JVGL01234567890/1011AB?lang=nl_NL',
           label_url: null,
         },
       ],
@@ -142,7 +142,7 @@ describe('generateEmailTemplate', () => {
       const html = ReactDOMServer.renderToStaticMarkup(node as React.ReactElement)
 
       expect(html).toContain('Volg uw pakket')
-      expect(html).toContain('https://www.dhlecommerce.nl/nl/consumer/track-and-trace?key=JVGL01234567890+1011AB')
+      expect(html).toContain('https://my.dhlecommerce.nl/home/tracktrace/JVGL01234567890/1011AB?lang=nl_NL')
     })
 
     it('still shows tracking number when no tracking_url is present', () => {

@@ -10,7 +10,7 @@ import { ORDER_SHIPPED_I18N } from '../../modules/email-notifications/templates/
 export async function sendOrderShippedNotification(
   container: any,
   fulfillmentId: string,
-  opts?: { noNotification?: boolean }
+  opts?: { noNotification?: boolean; orderId?: string }
 ): Promise<{ sent: boolean }> {
   const notificationModuleService: INotificationModuleService =
     container.resolve(Modules.NOTIFICATION)
@@ -24,9 +24,30 @@ export async function sendOrderShippedNotification(
     return { sent: false }
   }
 
+  // Resolve the order id first. Filtering orders on `fulfillments.id`
+  // (cross-module link path) generates broken SQL on Medusa 2.12 ("missing
+  // FROM-clause entry for table fulfillments") | it silently killed EVERY
+  // shipped email. Callers that know the order id pass it; the
+  // shipment.created subscriber resolves it via the link table.
+  let orderId = opts?.orderId ?? null
+  if (!orderId) {
+    const { data: links } = await query.graph({
+      entity: 'order_fulfillment',
+      filters: { fulfillment_id: fulfillmentId },
+      fields: ['order_id'],
+    })
+    orderId = (links?.[0] as { order_id?: string } | undefined)?.order_id ?? null
+  }
+  if (!orderId) {
+    logger.warn(
+      `sendOrderShippedNotification: no order link found for fulfillment ${fulfillmentId}; skipping notification`
+    )
+    return { sent: false }
+  }
+
   const { data: orders } = await query.graph({
     entity: 'order',
-    filters: { 'fulfillments.id': fulfillmentId },
+    filters: { id: orderId },
     fields: [
       'id',
       'display_id',
@@ -128,6 +149,15 @@ export async function sendOrderShippedNotification(
 
   const locale = await resolveOrderEmailLocale(container, order.id)
   const t = ORDER_SHIPPED_I18N[locale]
+
+  // Match the DHL portal language to the email language. Only the lang query
+  // param changes; the barcode/postcode deep link stays as stored.
+  const portalLang = locale === "de" ? "de_DE" : locale === "en" ? "en_GB" : "nl_NL"
+  for (const label of labels) {
+    if (label.tracking_url?.includes("my.dhlecommerce.nl")) {
+      label.tracking_url = label.tracking_url.replace(/lang=[A-Za-z_]+/, `lang=${portalLang}`)
+    }
+  }
   const replyTo = process.env.SUPPORT_EMAIL || process.env.CONTACT_EMAIL
 
   await notificationModuleService.createNotifications({

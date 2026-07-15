@@ -102,6 +102,8 @@ export async function GET(
     stage,
     tracking: view,
     tracking_url: trackingUrl,
+    tracking_number: trackingNumber,
+    postal_code: order.shipping_address?.postal_code ?? null,
     service_point: servicePoint,
     delivered_at: view?.delivered_at ?? null,
   })
