@@ -1,6 +1,6 @@
 import { escapeHtml, eur, line, orderGlyphs, whenAms } from '../format'
 import { ContainerRegistrationKeys } from '@medusajs/framework/utils'
-import { deriveStatus, orderTotal, RawOrder } from './order-data'
+import { deriveStatus, firstNumber, itemQuantity, orderTotal, RawOrder } from './order-data'
 import type { CommandHandler } from './router'
 
 const DETAIL_FIELDS = [
@@ -11,7 +11,9 @@ const DETAIL_FIELDS = [
   'fulfillments.labels.tracking_number', 'fulfillments.labels.tracking_url',
   'shipping_address.country_code', 'shipping_address.city',
   'shipping_address.first_name', 'shipping_address.last_name',
-  'items.title', 'items.quantity', 'items.unit_price',
+  'items.title', 'items.quantity', 'items.raw_quantity',
+  'items.detail.quantity', 'items.detail.raw_quantity',
+  'items.unit_price', 'items.raw_unit_price',
 ]
 
 export const orderDetailCommand: CommandHandler = async ({ container, args }) => {
@@ -31,7 +33,7 @@ export const orderDetailCommand: CommandHandler = async ({ container, args }) =>
   const name = [addr?.first_name, addr?.last_name].filter(Boolean).join(' ')
   const items = (o.items ?? [])
     .filter((i) => !!i)
-    .map((i) => `  ${i?.quantity ?? '?'}x ${escapeHtml(i?.title ?? '?')} (${eur(i?.unit_price)})`)
+    .map((i) => `  ${itemQuantity(i!) ?? '?'}x ${escapeHtml(i?.title ?? '?')} (${eur(firstNumber(i?.unit_price, i?.raw_unit_price) ?? 0)})`)
   const tracking = (o.fulfillments ?? [])
     .flatMap((f) => f?.labels ?? [])
     .map((l) => l?.tracking_url ? `<a href="${escapeHtml(l.tracking_url)}">${escapeHtml(l.tracking_number ?? 'track')}</a>` : escapeHtml(l?.tracking_number ?? ''))

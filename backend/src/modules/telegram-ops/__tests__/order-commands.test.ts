@@ -1,4 +1,4 @@
-import { deriveStatus, orderTotal } from '../commands/order-data'
+import { deriveStatus, itemQuantity, orderTotal } from '../commands/order-data'
 import { COMMANDS } from '../commands/router'
 
 const rawOrder = (over: Record<string, unknown> = {}) => ({
@@ -53,6 +53,16 @@ describe('orderTotal', () => {
   })
   it('returns 0 when nothing is numeric', () => {
     expect(orderTotal(rawOrder({ total: { value: 'x' }, summary: null, payment_collections: [] }) as any)).toBe(0)
+  })
+})
+
+describe('itemQuantity', () => {
+  it('reads all live shapes: plain, raw bigNumber object, detail row (prod regression: ?x)', () => {
+    expect(itemQuantity({ quantity: 2 } as any)).toBe(2)
+    expect(itemQuantity({ quantity: { value: '3', precision: 20 } } as any)).toBe(3)
+    expect(itemQuantity({ detail: { quantity: 1 } } as any)).toBe(1)
+    expect(itemQuantity({ detail: { raw_quantity: { value: '4' } } } as any)).toBe(4)
+    expect(itemQuantity({} as any)).toBeNull()
   })
 })
 

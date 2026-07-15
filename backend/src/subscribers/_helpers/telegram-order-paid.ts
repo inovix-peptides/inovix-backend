@@ -1,6 +1,7 @@
 import { ContainerRegistrationKeys } from '@medusajs/framework/utils'
 import type { MedusaContainer } from '@medusajs/framework/types'
 import { eur, headline, line } from '../../modules/telegram-ops/format'
+import { itemQuantity, orderTotal } from '../../modules/telegram-ops/commands/order-data'
 import { TELEGRAM_OPS_MODULE } from '../../modules/telegram-ops'
 import type TelegramOpsService from '../../modules/telegram-ops/service'
 import { Sentry } from '../../lib/instrument'
@@ -21,9 +22,10 @@ export async function notifyOrderPaidOnTelegram(container: MedusaContainer, orde
       entity: 'order',
       filters: { id: orderId },
       fields: [
-        'id', 'display_id', 'total', 'currency_code',
+        'id', 'display_id', 'total', 'currency_code', 'summary.*',
         'payment_collections.status', 'payment_collections.captured_amount',
-        'shipping_address.country_code', 'items.quantity', 'shipping_methods.name',
+        'shipping_address.country_code', 'shipping_methods.name',
+        'items.quantity', 'items.raw_quantity', 'items.detail.quantity', 'items.detail.raw_quantity',
       ],
     })
     const order = data?.[0]
@@ -32,10 +34,15 @@ export async function notifyOrderPaidOnTelegram(container: MedusaContainer, orde
     const paid = pc?.status === 'completed' || Number(pc?.captured_amount ?? 0) > 0
     if (!paid) return
 
-    const itemCount = (order.items ?? []).reduce((n: number, i: { quantity?: number | string }) => n + Number(i?.quantity ?? 0), 0)
+    // itemQuantity/orderTotal: live query.graph returns bigNumber columns as
+    // raw { value, precision } objects and puts quantity on items.detail.
+    const itemCount = (order.items ?? []).reduce(
+      (n: number, i: unknown) => n + (i ? itemQuantity(i as never) ?? 0 : 0),
+      0
+    )
     const text = [
       headline('🛒', `New order #${order.display_id}`),
-      line('Total', eur(order.total)),
+      line('Total', eur(orderTotal(order as never))),
       line('Items', String(itemCount)),
       line('Country', (order.shipping_address?.country_code ?? '?').toUpperCase()),
       ...(order.shipping_methods?.[0]?.name ? [line('Shipping', order.shipping_methods[0].name)] : []),
