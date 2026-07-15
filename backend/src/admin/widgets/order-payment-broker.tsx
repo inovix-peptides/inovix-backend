@@ -15,8 +15,10 @@ import { useEffect, useState } from "react"
 
 import {
   validateRefundAmount,
+  type PaymentEvent,
   type PaymentView,
 } from "./order-payment-broker.logic"
+import { paymentViewGate } from "./order-fulfillment-checklist.logic"
 
 // Dutch labels + badge colour per payment status.
 const STATUS_META: Record<string, { label: string; color: "green" | "orange" | "red" | "grey" }> = {
@@ -32,6 +34,33 @@ const STATUS_META: Record<string, { label: string; color: "green" | "orange" | "
 function statusMeta(status: string) {
   return STATUS_META[status] ?? { label: status, color: "grey" as const }
 }
+
+// Dutch labels for the Mollie payment method passed through by the broker.
+const METHOD_LABELS: Record<string, string> = {
+  ideal: "iDEAL",
+  creditcard: "Creditcard",
+  bancontact: "Bancontact",
+  banktransfer: "Overboeking",
+  paypal: "PayPal",
+  applepay: "Apple Pay",
+  in3: "in3",
+  klarna: "Klarna",
+}
+
+function methodLabel(method: string | null): string {
+  if (!method) return "|"
+  return METHOD_LABELS[method] ?? method
+}
+
+const EVENT_LABELS: Record<PaymentEvent["type"], string> = {
+  created: "Betaling gestart",
+  captured: "Betaald",
+  refunded: "Terugbetaald",
+  canceled: "Geannuleerd",
+}
+
+// Refresh cadence for the auto-poll; manual "Vernieuwen" stays available.
+const REFRESH_MS = 60_000
 
 function money(amount: number, currency: string): string {
   try {
@@ -92,6 +121,8 @@ const OrderPaymentBrokerWidget = ({ data }: DetailWidgetProps<AdminOrder>) => {
 
   useEffect(() => {
     void load()
+    const timer = setInterval(() => void load(false), REFRESH_MS)
+    return () => clearInterval(timer)
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [orderId])
 
@@ -148,6 +179,7 @@ const OrderPaymentBrokerWidget = ({ data }: DetailWidgetProps<AdminOrder>) => {
 
   const meta = statusMeta(payment.status)
   const canRefund = payment.remaining_refundable > 0
+  const gate = paymentViewGate(payment)
 
   return (
     <Container className="divide-y p-0">
@@ -155,8 +187,8 @@ const OrderPaymentBrokerWidget = ({ data }: DetailWidgetProps<AdminOrder>) => {
         <div>
           <Heading level="h2">Betaling (Mollie)</Heading>
           <Text size="small" className="text-ui-fg-subtle mt-1">
-            Live status via de betaalprovider. Beheer terugbetalingen hier zonder
-            in te loggen bij Mollie.
+            Live status via de betaalprovider, ververst automatisch elke minuut.
+            Beheer terugbetalingen hier zonder in te loggen bij Mollie.
           </Text>
         </div>
         <Button
@@ -184,10 +216,16 @@ const OrderPaymentBrokerWidget = ({ data }: DetailWidgetProps<AdminOrder>) => {
             {meta.label}
           </Badge>
         </Field>
+        <Field label="Betaalmethode">
+          <Text size="small">{methodLabel(payment.method)}</Text>
+        </Field>
+        <Field label="Bedrag">
+          <Text size="small">{money(payment.amount, payment.currency)}</Text>
+        </Field>
         <Field label="Betaald op">
           <Text size="small">{formatWhen(payment.captured_at)}</Text>
         </Field>
-        <Field label="Bedrag">
+        <Field label="Ontvangen">
           <Text size="small">{money(payment.captured_total, payment.currency)}</Text>
         </Field>
         <Field label="Terugbetaald">
@@ -203,20 +241,34 @@ const OrderPaymentBrokerWidget = ({ data }: DetailWidgetProps<AdminOrder>) => {
             {payment.mollie_payment_id ?? "|"}
           </Text>
         </Field>
+        <Field label="Verzendvrijgave">
+          {gate.ok ? (
+            <Badge color="green" size="2xsmall">
+              Vrijgegeven voor verzending
+            </Badge>
+          ) : (
+            <Badge color="red" size="2xsmall">
+              Geblokkeerd | {gate.reason}
+            </Badge>
+          )}
+        </Field>
       </div>
 
-      {payment.refunds.length > 0 && (
+      {payment.history.length > 0 && (
         <div className="px-6 py-4">
           <Text size="small" weight="plus" className="mb-2">
-            Terugbetalingen
+            Geschiedenis
           </Text>
           <div className="flex flex-col divide-y">
-            {payment.refunds.map((r) => (
-              <div key={r.id} className="flex items-center justify-between py-2">
-                <Text size="small">{money(r.amount, payment.currency)}</Text>
+            {payment.history.map((e, i) => (
+              <div key={i} className="flex items-center justify-between py-2">
+                <Text size="small">
+                  {EVENT_LABELS[e.type]}
+                  {e.amount != null ? ` | ${money(e.amount, payment.currency)}` : ""}
+                  {e.note ? ` | ${e.note}` : ""}
+                </Text>
                 <Text size="xsmall" className="text-ui-fg-subtle">
-                  {formatWhen(r.created_at)}
-                  {r.reason ? ` | ${r.reason}` : ""}
+                  {formatWhen(e.at)}
                 </Text>
               </div>
             ))}

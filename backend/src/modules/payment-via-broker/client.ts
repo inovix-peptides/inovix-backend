@@ -68,6 +68,11 @@ export class BrokerClient {
       status: BrokerStatus
       mollie_payment_id?: string | null
       captured_at?: string | null
+      method?: string | null
+      paid_at?: string | null
+      provider_status?: string | null
+      amount_minor?: number | null
+      currency?: string | null
     }>(`/external-payments/${encodeURIComponent(ref)}`, { method: "GET" })
 
     return {
@@ -75,6 +80,11 @@ export class BrokerClient {
       status: data.status,
       brokerPaymentId: data.mollie_payment_id ?? null,
       capturedAt: data.captured_at ?? null,
+      method: data.method ?? null,
+      paidAt: data.paid_at ?? null,
+      providerStatus: data.provider_status ?? null,
+      amountMinor: data.amount_minor ?? null,
+      currencyCode: data.currency ?? null,
     }
   }
 

@@ -798,7 +798,8 @@ const OrderFulfillmentChecklistWidget = ({
 }
 
 export const config = defineWidgetConfig({
-  zone: "order.details.before",
+  // Bottom of the order page (operator preference); was order.details.before.
+  zone: "order.details.after",
 })
 
 export default OrderFulfillmentChecklistWidget

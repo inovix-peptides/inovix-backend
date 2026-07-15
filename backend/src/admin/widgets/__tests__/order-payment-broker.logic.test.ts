@@ -238,3 +238,75 @@ describe("buildPaymentView", () => {
     expect(view.refunds).toEqual([])
   })
 })
+
+describe("buildPaymentView enrichment (method, paid_at, history)", () => {
+  const payment: RawMedusaPayment = {
+    id: "pay_h",
+    provider_id: "pp_via_broker_via_broker",
+    currency_code: "eur",
+    amount: 34.95,
+    captured_amount: 34.95,
+    refunded_amount: 5,
+    created_at: "2026-07-12T20:20:00.000Z",
+    captured_at: "2026-07-12T20:21:22.000Z",
+    canceled_at: null,
+    data: { ref: "pay_abc" },
+    captures: [{ amount: 34.95, created_at: "2026-07-12T20:21:23.000Z" }],
+    refunds: [
+      {
+        id: "r1",
+        amount: 5,
+        created_at: "2026-07-13T09:00:00.000Z",
+        note: "deels retour",
+        refund_reason: { label: "Defect" },
+      },
+    ],
+  }
+
+  it("passes the broker method through and prefers mollie paid_at", () => {
+    const view = buildPaymentView(payment, {
+      status: "captured",
+      mollie_payment_id: "tr_x",
+      captured_at: "2026-07-12T20:21:22.000Z",
+      method: "ideal",
+      paid_at: "2026-07-12T20:21:25.000Z",
+      mollie_status: "paid",
+    })
+    expect(view.method).toBe("ideal")
+    expect(view.captured_at).toBe("2026-07-12T20:21:25.000Z")
+    expect(view.mollie_status).toBe("paid")
+  })
+
+  it("defaults method/mollie_status to null when the broker is down or older", () => {
+    const view = buildPaymentView(payment, null)
+    expect(view.method).toBeNull()
+    expect(view.mollie_status).toBeNull()
+    const older = buildPaymentView(payment, {
+      status: "captured",
+      mollie_payment_id: "tr_x",
+      captured_at: "2026-07-12T20:21:22.000Z",
+    })
+    expect(older.method).toBeNull()
+  })
+
+  it("builds a newest-first history from created, captures and refunds", () => {
+    const view = buildPaymentView(payment, null)
+    expect(view.history.map((e) => e.type)).toEqual(["refunded", "captured", "created"])
+    expect(view.history[0]).toMatchObject({
+      type: "refunded",
+      at: "2026-07-13T09:00:00.000Z",
+      amount: 5,
+      note: "Defect",
+    })
+    expect(view.history[1]).toMatchObject({ type: "captured", amount: 34.95 })
+    expect(view.history[2]).toMatchObject({ type: "created", amount: 34.95 })
+  })
+
+  it("adds a canceled event when the payment was canceled", () => {
+    const view = buildPaymentView(
+      { ...payment, canceled_at: "2026-07-14T08:00:00.000Z", refunds: [], captures: [] },
+      null
+    )
+    expect(view.history[0]).toMatchObject({ type: "canceled", at: "2026-07-14T08:00:00.000Z" })
+  })
+})

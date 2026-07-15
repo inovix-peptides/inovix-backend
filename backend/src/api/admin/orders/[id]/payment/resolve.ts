@@ -33,11 +33,13 @@ const PAYMENT_FIELDS = [
   "currency_code",
   "amount",
   "raw_amount",
+  "created_at",
   "captured_at",
   "canceled_at",
   "data",
   "captures.id",
   "captures.amount",
+  "captures.created_at",
   "refunds.id",
   "refunds.amount",
   "refunds.created_at",
@@ -94,6 +96,9 @@ type BrokerLikeClient = {
     status: string
     brokerPaymentId: string | null
     capturedAt: string | null
+    method?: string | null
+    paidAt?: string | null
+    providerStatus?: string | null
   }>
 }
 
@@ -129,6 +134,9 @@ export async function fetchBrokerLive(
       status: payment.status,
       mollie_payment_id: payment.brokerPaymentId ?? null,
       captured_at: payment.capturedAt ?? null,
+      method: payment.method ?? null,
+      paid_at: payment.paidAt ?? null,
+      mollie_status: payment.providerStatus ?? null,
     }
   } catch (err) {
     deps?.logger?.warn(

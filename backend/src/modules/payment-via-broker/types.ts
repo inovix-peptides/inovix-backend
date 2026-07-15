@@ -45,6 +45,13 @@ export type BrokerPayment = {
   status: BrokerStatus
   brokerPaymentId: string | null
   capturedAt: string | null
+  // Enrichment passed through from the broker's read-only Mollie lookup.
+  // Older broker versions omit these; treat as null.
+  method: string | null
+  paidAt: string | null
+  providerStatus: string | null
+  amountMinor: number | null
+  currencyCode: string | null
 }
 
 export type BrokerCallbackBody = {

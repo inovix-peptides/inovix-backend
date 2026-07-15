@@ -26,6 +26,7 @@ export type RawRefund = {
 export type RawCapture = {
   id?: string | null
   amount?: AmountLike
+  created_at?: string | Date | null
 }
 
 export type RawMedusaPayment = {
@@ -36,6 +37,7 @@ export type RawMedusaPayment = {
   raw_amount?: AmountLike
   captured_amount?: AmountLike
   refunded_amount?: AmountLike
+  created_at?: string | Date | null
   captured_at?: string | Date | null
   canceled_at?: string | Date | null
   data?: { ref?: string | null } | null
@@ -44,10 +46,15 @@ export type RawMedusaPayment = {
 }
 
 // What the broker GET tells us live. Null means the broker was unreachable.
+// method/paid_at/mollie_status are enrichment fields the broker passes
+// through from a read-only Mollie lookup; older broker versions omit them.
 export type BrokerLive = {
   status: string
   mollie_payment_id: string | null
   captured_at: string | null
+  method?: string | null
+  paid_at?: string | null
+  mollie_status?: string | null
 } | null
 
 export type RefundView = {
@@ -57,17 +64,30 @@ export type RefundView = {
   reason: string | null
 }
 
+export type PaymentEventType = "created" | "captured" | "refunded" | "canceled"
+
+export type PaymentEvent = {
+  type: PaymentEventType
+  at: string
+  amount: number | null
+  note: string | null
+}
+
 export type PaymentView = {
   ref: string | null
   status: string
   mollie_payment_id: string | null
   captured_at: string | null
+  method: string | null
+  mollie_status: string | null
+  created_at: string | null
   currency: string
   amount: number
   captured_total: number
   refunded_total: number
   remaining_refundable: number
   refunds: RefundView[]
+  history: PaymentEvent[]
   broker_unavailable: boolean
 }
 
@@ -159,27 +179,72 @@ function refundCreatedAtMs(r: RefundView): number {
   return Number.isFinite(t) ? t : 0
 }
 
+function isoOrNull(v: string | Date | null | undefined): string | null {
+  if (!v) return null
+  return v instanceof Date ? v.toISOString() : v
+}
+
+function eventAtMs(e: PaymentEvent): number {
+  const t = new Date(e.at).getTime()
+  return Number.isFinite(t) ? t : 0
+}
+
+// The payment's life as a newest-first timeline: created -> captures ->
+// refunds (-> canceled). Built from the Medusa rows, which are written the
+// moment each event happens, so this is the authoritative history.
+function buildHistory(
+  payment: RawMedusaPayment,
+  amount: number,
+  refunds: RefundView[]
+): PaymentEvent[] {
+  const events: PaymentEvent[] = []
+  const createdAt = isoOrNull(payment.created_at)
+  if (createdAt) {
+    events.push({ type: "created", at: createdAt, amount, note: null })
+  }
+  for (const capture of payment.captures ?? []) {
+    const at = isoOrNull(capture.created_at)
+    if (!at) continue
+    events.push({
+      type: "captured",
+      at,
+      amount: round2(toAmount(capture.amount)),
+      note: null,
+    })
+  }
+  for (const refund of refunds) {
+    if (!refund.created_at) continue
+    events.push({
+      type: "refunded",
+      at: refund.created_at,
+      amount: refund.amount,
+      note: refund.reason,
+    })
+  }
+  const canceledAt = isoOrNull(payment.canceled_at)
+  if (canceledAt) {
+    events.push({ type: "canceled", at: canceledAt, amount: null, note: null })
+  }
+  events.sort((a, b) => eventAtMs(b) - eventAtMs(a))
+  return events
+}
+
 export function buildPaymentView(
   payment: RawMedusaPayment,
   broker: BrokerLive
 ): PaymentView {
   const capturedTotal = round2(toAmount(payment.captured_amount))
   const refundedTotal = round2(toAmount(payment.refunded_amount))
+  const amount = round2(toAmount(payment.amount))
   const refunds: RefundView[] = (payment.refunds ?? []).map((r) => ({
     id: r.id ?? "",
     amount: round2(toAmount(r.amount)),
-    created_at:
-      r.created_at instanceof Date
-        ? r.created_at.toISOString()
-        : (r.created_at ?? ""),
+    created_at: isoOrNull(r.created_at) ?? "",
     reason: r.refund_reason?.label ?? null,
   }))
   refunds.sort((a, b) => refundCreatedAtMs(b) - refundCreatedAtMs(a))
 
-  const capturedAt =
-    payment.captured_at instanceof Date
-      ? payment.captured_at.toISOString()
-      : (payment.captured_at ?? null)
+  const capturedAt = isoOrNull(payment.captured_at)
 
   return {
     ref: payment.data?.ref ?? null,
@@ -187,13 +252,17 @@ export function buildPaymentView(
       broker?.status ??
       deriveStatusFromMedusa(payment, capturedTotal, refundedTotal),
     mollie_payment_id: broker?.mollie_payment_id ?? null,
-    captured_at: broker?.captured_at ?? capturedAt,
+    captured_at: broker?.paid_at ?? broker?.captured_at ?? capturedAt,
+    method: broker?.method ?? null,
+    mollie_status: broker?.mollie_status ?? null,
+    created_at: isoOrNull(payment.created_at),
     currency: (payment.currency_code ?? "").toUpperCase(),
-    amount: round2(toAmount(payment.amount)),
+    amount,
     captured_total: capturedTotal,
     refunded_total: refundedTotal,
     remaining_refundable: computeRemainingRefundable(capturedTotal, refundedTotal),
     refunds,
+    history: buildHistory(payment, amount, refunds),
     broker_unavailable: broker === null,
   }
 }
