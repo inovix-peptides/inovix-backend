@@ -219,14 +219,14 @@ describe("DhlParcelFulfillmentProviderService", () => {
     })
     expect(result.data.dhl_label_pdf_url).toBe("data:application/pdf;base64,JVBERi0xLjQ=")
     expect(result.data.dhl_shipment_tracking_url).toBe(
-      "https://www.dhlecommerce.nl/nl/consumer/track-and-trace?key=JVGL0123456789NL+3000AA",
+      "https://www.dhlecommerce.nl/nl/consumer/track-and-trace?key=JVGL0123456789NL%2B3000AA",
     )
 
     expect(result.labels).toEqual([
       {
         tracking_number: "JVGL0123456789NL",
         tracking_url:
-          "https://www.dhlecommerce.nl/nl/consumer/track-and-trace?key=JVGL0123456789NL+3000AA",
+          "https://www.dhlecommerce.nl/nl/consumer/track-and-trace?key=JVGL0123456789NL%2B3000AA",
         label_url: "data:application/pdf;base64,JVBERi0xLjQ=",
       },
     ])
