@@ -1,13 +1,13 @@
-import { ContainerRegistrationKeys, MedusaError, Modules } from "@medusajs/framework/utils"
+import { ContainerRegistrationKeys, MedusaError } from "@medusajs/framework/utils"
 import type { Logger, MedusaContainer } from "@medusajs/framework/types"
 import { createDhlParcelShipmentWorkflow } from "../workflows/create-dhl-parcel-shipment"
 import { resolveBrokerPayment } from "../api/admin/orders/[id]/payment/resolve"
 import {
   allItemsTicked,
-  applyChecklistAction,
   hasOverride,
   parseChecklist,
 } from "../admin/widgets/order-fulfillment-checklist.logic"
+import { applyChecklistUpdate } from "./fulfillment-checklist-write"
 import { TELEGRAM_OPS_MODULE } from "../modules/telegram-ops"
 import type TelegramOpsService from "../modules/telegram-ops/service"
 import { headline, line } from "../modules/telegram-ops/format"
@@ -185,19 +185,16 @@ export async function createDhlLabelForOrder(
   const itemIds = ((raw.items ?? []) as any[]).map((i: any) => String(i.id))
   if (!allItemsTicked(itemIds, checklist) && !hasOverride(checklist, "items")) {
     if (opts.itemsOverride) {
-      const applied = applyChecklistAction(
-        checklist,
+      // Through the shared per-order write queue so an override can never
+      // drop a concurrent admin tick (lib/fulfillment-checklist-write.ts).
+      const applied = await applyChecklistUpdate(
+        container,
+        orderId,
         { action: "override", step: "items", reason: opts.itemsOverride.reason },
-        { by_id: opts.itemsOverride.byId, by_name: opts.itemsOverride.byName },
-        new Date().toISOString()
+        { by_id: opts.itemsOverride.byId, by_name: opts.itemsOverride.byName }
       )
       if ("error" in applied) return { status: "error", message: applied.error }
       checklist = applied.next
-      const orderService: any = container.resolve(Modules.ORDER)
-      await orderService.updateOrders({
-        id: orderId,
-        metadata: { ...((raw as any).metadata ?? {}), fulfillment_checklist: checklist },
-      })
       logger.info(
         `admin.dhl-label: items override recorded via Telegram for order ${orderId} by ${opts.itemsOverride.byName}`
       )

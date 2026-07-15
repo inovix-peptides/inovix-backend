@@ -10,6 +10,7 @@ import { findCommand } from './find'
 import { salesCommand } from './sales'
 import { restockCommand } from './restock'
 import { logCommand } from './log'
+import { stationCommand } from './station'
 import { CallbackQuery, handleCallback } from './callbacks'
 import { CommandReply, normalizeReply } from './reply'
 import '../actions' // registers lbl/lblo/shp/shpc/rst into CALLBACKS
@@ -56,6 +57,7 @@ export const COMMANDS: Record<string, CommandHandler> = {
   sales: salesCommand,
   restock: restockCommand,
   log: logCommand,
+  station: stationCommand,
 }
 
 export async function handleUpdate(container: MedusaContainer, update: TelegramUpdate): Promise<void> {

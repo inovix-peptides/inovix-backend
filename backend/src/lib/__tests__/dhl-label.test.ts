@@ -22,7 +22,12 @@ const tickedChecklist = (itemIds: string[]) => ({
 
 function makeContainer(order: unknown) {
   const query = { graph: jest.fn().mockResolvedValue({ data: order ? [order] : [] }) }
-  const orderService = { updateOrders: jest.fn().mockResolvedValue({}) }
+  const orderService = {
+    updateOrders: jest.fn().mockResolvedValue({}),
+    // The override path goes through lib/fulfillment-checklist-write.ts,
+    // which re-reads the order via the order module inside the write queue.
+    retrieveOrder: jest.fn(async () => ({ id: 'ord_1', metadata: (order as { metadata?: unknown })?.metadata ?? {} })),
+  }
   const tg = { notify: jest.fn().mockResolvedValue(true) }
   const logger = { info: jest.fn(), warn: jest.fn(), error: jest.fn() }
   return {
@@ -88,14 +93,14 @@ describe('createDhlLabelForOrder', () => {
       itemsOverride: { byId: 'tg:8842061517', byName: 'Sam', reason: 'Label aangemaakt via Telegram-bot door Sam' },
     })
     expect(r).toMatchObject({ status: 'created', fulfillment_id: 'ful_2', tracking_number: '3S2' })
-    expect(c.orderService.updateOrders).toHaveBeenCalledWith(expect.objectContaining({
+    expect(c.orderService.updateOrders).toHaveBeenCalledWith([expect.objectContaining({
       id: 'ord_1',
       metadata: expect.objectContaining({
         fulfillment_checklist: expect.objectContaining({
           overrides: [expect.objectContaining({ step: 'items', by_name: 'Sam' })],
         }),
       }),
-    }))
+    })])
   })
 
   it('creates the label when the checklist is complete', async () => {

@@ -1,42 +1,17 @@
 import type { AuthenticatedMedusaRequest, MedusaResponse } from "@medusajs/framework/http"
 import { Modules } from "@medusajs/framework/utils"
-import type {
-  IOrderModuleService,
-  IUserModuleService,
-  Logger,
-} from "@medusajs/framework/types"
+import type { IUserModuleService, Logger } from "@medusajs/framework/types"
 
-import {
-  applyChecklistAction,
-  parseChecklist,
-  type ChecklistAction,
-} from "../../../../../admin/widgets/order-fulfillment-checklist.logic"
-
-// Serializes checklist writes per order. Two concurrent POSTs for the same
-// order would otherwise both read the same metadata snapshot and the second
-// write would silently drop the first one's tick. An in-process chain is
-// sufficient because the backend runs as a single Railway instance.
-const orderWriteChains = new Map<string, Promise<unknown>>()
-
-function withOrderWriteQueue<T>(orderId: string, fn: () => Promise<T>): Promise<T> {
-  const prev = orderWriteChains.get(orderId) ?? Promise.resolve()
-  const run = prev.then(fn, fn)
-  const marker = run.then(
-    () => undefined,
-    () => undefined
-  )
-  orderWriteChains.set(orderId, marker)
-  void marker.then(() => {
-    if (orderWriteChains.get(orderId) === marker) orderWriteChains.delete(orderId)
-  })
-  return run
-}
+import type { ChecklistAction } from "../../../../../admin/widgets/order-fulfillment-checklist.logic"
+import { applyChecklistUpdate } from "../../../../../lib/fulfillment-checklist-write"
 
 // POST /admin/orders/:id/fulfillment-checklist
 // Applies ONE checklist action (item tick, package-closed confirm, override)
 // to order.metadata.fulfillment_checklist. The acting admin user is stamped
 // server-side from the auth context so the audit trail cannot be spoofed by
-// the client. Other metadata keys are preserved (merge, not replace).
+// the client. The write itself goes through the shared per-order queue in
+// lib/fulfillment-checklist-write.ts (also used by the Telegram bot), so
+// concurrent writers never drop each other's ticks.
 export const POST = async (
   req: AuthenticatedMedusaRequest,
   res: MedusaResponse
@@ -51,37 +26,17 @@ export const POST = async (
   }
 
   const action = (req.body ?? {}) as ChecklistAction
-  const orderModule = req.scope.resolve(Modules.ORDER) as IOrderModuleService
   const userModule = req.scope.resolve(Modules.USER) as IUserModuleService
 
   try {
-    const outcome = await withOrderWriteQueue(orderId, async () => {
-      const [order, user] = await Promise.all([
-        orderModule.retrieveOrder(orderId),
-        userModule.retrieveUser(actorId).catch(() => null),
-      ])
-      const byName = user
-        ? `${user.first_name ?? ""} ${user.last_name ?? ""}`.trim() || user.email || actorId
-        : actorId
+    const user = await userModule.retrieveUser(actorId).catch(() => null)
+    const byName = user
+      ? `${user.first_name ?? ""} ${user.last_name ?? ""}`.trim() || user.email || actorId
+      : actorId
 
-      const state = parseChecklist(order.metadata)
-      const result = applyChecklistAction(
-        state,
-        action,
-        { by_id: actorId, by_name: byName },
-        new Date().toISOString()
-      )
-      if ("error" in result) {
-        return { error: result.error } as const
-      }
-
-      const metadata = {
-        ...((order.metadata ?? {}) as Record<string, unknown>),
-        fulfillment_checklist: result.next,
-      }
-      await orderModule.updateOrders([{ id: orderId, metadata } as never])
-
-      return { next: result.next } as const
+    const outcome = await applyChecklistUpdate(req.scope, orderId, action, {
+      by_id: actorId,
+      by_name: byName,
     })
 
     if ("error" in outcome) {

@@ -6,9 +6,13 @@ import { CALLBACKS } from '../commands/callbacks'
 import { lblAction, lbloAction } from './create-label'
 import { shpAction, shpcAction } from './mark-shipped'
 import { rstAction } from './restock'
+import { chkAction, tckAction, clsAction } from './checklist'
 
 CALLBACKS.lbl = lblAction
 CALLBACKS.lblo = lbloAction
 CALLBACKS.shp = shpAction
 CALLBACKS.shpc = shpcAction
 CALLBACKS.rst = rstAction
+CALLBACKS.chk = chkAction
+CALLBACKS.tck = tckAction
+CALLBACKS.cls = clsAction

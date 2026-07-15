@@ -49,6 +49,7 @@ export async function notifyOrderPaidOnTelegram(container: MedusaContainer, orde
     ].join('\n')
     await svc.notify(`tg-order-${order.id}`, 'order_paid', text, {
       reply_markup: { inline_keyboard: [[
+        { text: '📋 Checklist', callback_data: `chk:${order.id}` },
         { text: '📦 Create label', callback_data: `lbl:${order.id}` },
         { text: 'Details', callback_data: `det:${order.display_id}` },
       ]] },

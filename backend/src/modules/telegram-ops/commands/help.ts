@@ -3,6 +3,7 @@ export function helpText(): string {
     '<b>Inovix Ops</b>',
     '',
     '/todo | orders needing action',
+    '/station | verzendstation queues (process / ship)',
     '/orders [n] | recent orders',
     '/order &lt;number&gt; | order detail + action buttons',
     '/stock [search] | inventory levels',

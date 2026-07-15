@@ -1,6 +1,7 @@
 import { escapeHtml, eur, line, orderGlyphs, whenAms } from '../format'
 import { ContainerRegistrationKeys } from '@medusajs/framework/utils'
 import { deriveStatus, firstNumber, itemQuantity, orderTotal, RawOrder } from './order-data'
+import { checklistSummaryLine, loadChecklistView } from './checklist-data'
 import type { CommandHandler } from './router'
 
 const DETAIL_FIELDS = [
@@ -39,12 +40,17 @@ export const orderDetailCommand: CommandHandler = async ({ container, args }) =>
     .map((l) => l?.tracking_url ? `<a href="${escapeHtml(l.tracking_url)}">${escapeHtml(l.tracking_number ?? 'track')}</a>` : escapeHtml(l?.tracking_number ?? ''))
     .filter(Boolean)
 
+  // Checklist status (best-effort second read: a checklist problem must
+  // never break /order itself).
+  const checklistView = await loadChecklistView(container, o.id).catch(() => null)
+
   const text = [
     `📄 <b>Order #${o.display_id}</b> ${orderGlyphs(st)}`,
     line('Placed', whenAms(o.created_at)),
     line('Total', `${eur(orderTotal(o))} ${o.currency_code?.toUpperCase() ?? ''}`),
     line('Customer', `${name || '?'}${o.email ? `, ${o.email}` : ''}`),
     line('Where', `${addr?.city ?? '?'}, ${(addr?.country_code ?? '?').toUpperCase()}`),
+    ...(checklistView ? [checklistSummaryLine(checklistView)] : []),
     '',
     '<b>Items</b>',
     ...items,
@@ -59,6 +65,9 @@ export const orderDetailCommand: CommandHandler = async ({ container, args }) =>
   }
   if (!st.canceled && st.hasLabel && !st.shipped) {
     buttons.push({ text: '🚚 Mark shipped', callback_data: `shp:${o.id}:${o.display_id}` })
+  }
+  if (!st.canceled && !st.shipped) {
+    buttons.push({ text: '📋 Checklist', callback_data: `chk:${o.id}` })
   }
   if (!buttons.length) return text
   return { text, reply_markup: { inline_keyboard: [buttons] } }

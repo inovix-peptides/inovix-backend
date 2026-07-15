@@ -120,6 +120,12 @@ describe('command handlers', () => {
     expect(kb).not.toContain('shp:')
   })
 
+  it('/order includes the checklist summary line and a Checklist button', async () => {
+    const reply = await COMMANDS.order({ container, svc, chatId: '1', args: ['28412'] })
+    expect(textOf(reply)).toContain('Checklist:')
+    expect(JSON.stringify((reply as { reply_markup?: unknown }).reply_markup)).toContain('chk:order_1')
+  })
+
   it('/order on a labeled, unshipped order offers a Mark shipped button', async () => {
     graph.mockResolvedValue({
       data: [rawOrder({ fulfillments: [{ packed_at: 'x', shipped_at: null, canceled_at: null }] })],
