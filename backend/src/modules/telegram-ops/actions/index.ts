@@ -5,14 +5,17 @@
 import { CALLBACKS } from '../commands/callbacks'
 import { lblAction, lbloAction } from './create-label'
 import { shpAction, shpcAction } from './mark-shipped'
-import { rstAction } from './restock'
+import { rskAction, rstAction } from './restock'
 import { chkAction, tckAction, clsAction } from './checklist'
+import { snzAction } from './snooze'
 
 CALLBACKS.lbl = lblAction
 CALLBACKS.lblo = lbloAction
 CALLBACKS.shp = shpAction
 CALLBACKS.shpc = shpcAction
 CALLBACKS.rst = rstAction
+CALLBACKS.rsk = rskAction
 CALLBACKS.chk = chkAction
 CALLBACKS.tck = tckAction
 CALLBACKS.cls = clsAction
+CALLBACKS.snz = snzAction

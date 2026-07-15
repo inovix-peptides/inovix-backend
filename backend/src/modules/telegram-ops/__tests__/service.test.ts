@@ -144,6 +144,33 @@ describe('phase 2 service additions', () => {
     await expect(failing.releaseAction('k')).resolves.toBeUndefined()
   })
 
+  it('findEvent returns the row for a key or null', async () => {
+    const svc = makeService()
+    ;(svc as any).listTelegramOpsEvents = jest.fn()
+      .mockResolvedValueOnce([{ id: 'evt_1', key: 'k1', kind: 'reminder', sent_at: null, snoozed_until: null, payload: {} }])
+      .mockResolvedValueOnce([])
+    await expect(svc.findEvent('k1')).resolves.toMatchObject({ id: 'evt_1', key: 'k1' })
+    await expect(svc.findEvent('missing')).resolves.toBeNull()
+  })
+
+  it('touchEvent updates an existing row by id and creates when absent', async () => {
+    const svc = makeService()
+    const update = jest.fn().mockResolvedValue({})
+    const create = jest.fn().mockResolvedValue({})
+    ;(svc as any).updateTelegramOpsEvents = update
+    ;(svc as any).createTelegramOpsEvents = create
+    ;(svc as any).listTelegramOpsEvents = jest.fn()
+      .mockResolvedValueOnce([{ id: 'evt_1', key: 'k1' }])
+      .mockResolvedValueOnce([])
+
+    const until = new Date('2026-07-16T10:00:00Z')
+    await svc.touchEvent('k1', 'reminder', { snoozed_until: until })
+    expect(update).toHaveBeenCalledWith(expect.objectContaining({ id: 'evt_1', snoozed_until: until }))
+
+    await svc.touchEvent('k2', 'reminder', { sent_at: until, payload: { state: 'low' } })
+    expect(create).toHaveBeenCalledWith(expect.objectContaining({ key: 'k2', kind: 'reminder', sent_at: until, payload: { state: 'low' } }))
+  })
+
   it('listRecentActions filters to action kinds, newest first', async () => {
     const svc = makeService()
     const list = jest.fn().mockResolvedValue([])

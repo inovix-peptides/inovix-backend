@@ -2,6 +2,8 @@ import type { MedusaContainer } from '@medusajs/framework/types'
 import type TelegramOpsService from '../service'
 import { escapeHtml } from '../format'
 import { orderDetailCommand } from './order-detail'
+import { todoCommand } from './todo'
+import { stockCommand } from './stock'
 import { normalizeReply } from './reply'
 
 // Confirm prompts are appended to the host message with this prefix; the
@@ -49,9 +51,25 @@ const disAction: CallbackHandler = async (ctx) => {
   await ctx.svc.editMessage(ctx.chatId, ctx.messageId, `${escapeHtml(stripConfirm(ctx.originalText))}\n\nCanceled.`)
 }
 
+// Read-only drill-ins from notification buttons (digest -> todo, stock
+// alert -> stock levels). Both send NEW messages, never edit the host.
+const tdoAction: CallbackHandler = async (ctx) => {
+  const reply = await todoCommand({ container: ctx.container, svc: ctx.svc, chatId: ctx.chatId, args: [] })
+  const { text, extra } = normalizeReply(reply)
+  await ctx.svc.sendTo(ctx.chatId, text, extra)
+}
+
+const stkAction: CallbackHandler = async (ctx) => {
+  const reply = await stockCommand({ container: ctx.container, svc: ctx.svc, chatId: ctx.chatId, args: [] })
+  const { text, extra } = normalizeReply(reply)
+  await ctx.svc.sendTo(ctx.chatId, text, extra)
+}
+
 export const CALLBACKS: Record<string, CallbackHandler> = {
   det: detAction,
   dis: disAction,
+  tdo: tdoAction,
+  stk: stkAction,
 }
 
 // Action handlers live in ../actions/ and register themselves here at load

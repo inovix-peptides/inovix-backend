@@ -162,6 +162,26 @@ class TelegramOpsService extends MedusaService({ TelegramOpsEvent }) {
     }
   }
 
+  /** The event-log row for a key (reminder / stock-crossing state), or null. */
+  async findEvent(key: string): Promise<{ id: string; key: string; kind: string; sent_at: Date | string | null; snoozed_until: Date | string | null; payload: Record<string, unknown> | null } | null> {
+    const rows = await this.listTelegramOpsEvents({ key })
+    return ((rows as never[])[0] as never) ?? null
+  }
+
+  /**
+   * Upsert reminder/state fields on the row for `key` (creates it when
+   * absent). Unlike notify/claimAction this is NOT a dedup primitive: it is
+   * how the scheduled jobs track last-send time, snooze, and crossing state.
+   */
+  async touchEvent(key: string, kind: string, data: { sent_at?: Date; snoozed_until?: Date; payload?: Record<string, unknown> }): Promise<void> {
+    const existing = await this.findEvent(key)
+    if (existing) {
+      await this.updateTelegramOpsEvents({ id: existing.id, ...data })
+      return
+    }
+    await this.createTelegramOpsEvents({ key, kind, ...data })
+  }
+
   async listRecentActions(take: number): Promise<Array<{ kind: string; sent_at: Date | string | null; actor_name: string | null; payload: Record<string, unknown> | null }>> {
     const rows = await this.listTelegramOpsEvents(
       { kind: ['act_label', 'act_ship', 'act_restock'] },

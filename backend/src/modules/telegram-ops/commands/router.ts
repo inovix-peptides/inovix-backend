@@ -11,6 +11,9 @@ import { salesCommand } from './sales'
 import { restockCommand } from './restock'
 import { logCommand } from './log'
 import { stationCommand } from './station'
+import { digestCommand } from './digest'
+import { topCommand } from './top'
+import { customerCommand } from './customer'
 import { CallbackQuery, handleCallback } from './callbacks'
 import { CommandReply, normalizeReply } from './reply'
 import '../actions' // registers lbl/lblo/shp/shpc/rst into CALLBACKS
@@ -58,6 +61,9 @@ export const COMMANDS: Record<string, CommandHandler> = {
   restock: restockCommand,
   log: logCommand,
   station: stationCommand,
+  digest: digestCommand,
+  top: topCommand,
+  customer: customerCommand,
 }
 
 export async function handleUpdate(container: MedusaContainer, update: TelegramUpdate): Promise<void> {
