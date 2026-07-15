@@ -49,6 +49,13 @@ Railway. This `backend/` folder is the app; the git root is one level up at
 - `src/modules/email-notifications/` + `src/subscribers/` — Resend transactional
   emails; dedup via idempotency keys (a real re-send needs a UNIQUE key).
 - `src/modules/minio-file/` — patched for Cloudflare R2 (`MINIO_PUBLIC_URL`).
+- `src/modules/telegram-ops/` + `src/subscribers/tg-*` + `src/api/webhooks/telegram/`
+  | operator Telegram bot (@InovixOpsBot): notifications + read commands, no
+  money actions. Idempotent sends via the `telegram_ops_event` table. Order
+  data MUST go through `commands/order-data.ts` helpers (orderTotal,
+  itemQuantity, firstNumber) | live query.graph returns null relation
+  elements, unreliable order.total, and quantities on items.detail as raw
+  bigNumber objects. See the inovix-telegram-ops skill.
 
 ## Code conventions
 - Medusa module update methods take the id IN the data:
