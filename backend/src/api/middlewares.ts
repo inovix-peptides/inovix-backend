@@ -19,6 +19,20 @@ export default defineMiddlewares({
       bodyParser: { preserveRawBody: true },
     },
     {
+      // Sentry signs its ops webhook (hex HMAC-SHA256) over the exact raw
+      // request bytes; preserve them for the signature check.
+      matcher: "/webhooks/ops/sentry",
+      method: ["POST"],
+      bodyParser: { preserveRawBody: true },
+    },
+    {
+      // Vercel signs its deployment webhook (hex HMAC-SHA1) over the exact
+      // raw request bytes; preserve them for the signature check.
+      matcher: "/webhooks/ops/vercel",
+      method: ["POST"],
+      bodyParser: { preserveRawBody: true },
+    },
+    {
       matcher: "/auth/*",
       middlewares: [
         rateLimit({

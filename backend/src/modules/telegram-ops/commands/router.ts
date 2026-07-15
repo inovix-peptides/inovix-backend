@@ -12,6 +12,7 @@ import { restockCommand } from './restock'
 import { logCommand } from './log'
 import { stationCommand } from './station'
 import { digestCommand } from './digest'
+import { statusCommand } from './status'
 import { topCommand } from './top'
 import { customerCommand } from './customer'
 import { CallbackQuery, handleCallback } from './callbacks'
@@ -62,6 +63,7 @@ export const COMMANDS: Record<string, CommandHandler> = {
   log: logCommand,
   station: stationCommand,
   digest: digestCommand,
+  status: statusCommand,
   top: topCommand,
   customer: customerCommand,
 }

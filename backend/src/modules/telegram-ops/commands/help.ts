@@ -13,6 +13,7 @@ export function helpText(): string {
     '/top [week|month] | best sellers',
     '/customer &lt;email or name&gt; | order history + lifetime value',
     '/digest | the daily digest on demand',
+    '/status | site + deploys + errors + todo',
     '/log [n] | recent bot actions',
     '/help | this overview',
   ].join('\n')
