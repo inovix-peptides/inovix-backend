@@ -65,6 +65,22 @@ describe('periodBounds', () => {
     const { start, prevStart } = periodBounds('today', now)
     expect(start.getTime() - prevStart.getTime()).toBe(24 * 3600 * 1000)
   })
+  // DST-regime crossings: the boundary instant must use the offset of the
+  // boundary date itself, not the offset at `now`.
+  it('month prevStart crossing CEST->CET back into March 1 00:00 CET', () => {
+    const { prevStart } = periodBounds('month', new Date('2026-04-15T11:00:00Z'))
+    expect(prevStart.toISOString()).toBe('2026-02-28T23:00:00.000Z') // Mar 1 00:00 CET
+  })
+  it('month prevStart crossing CET->CEST back into October 1 00:00 CEST', () => {
+    const { prevStart } = periodBounds('month', new Date('2026-11-15T11:00:00Z'))
+    expect(prevStart.toISOString()).toBe('2026-09-30T22:00:00.000Z') // Oct 1 00:00 CEST
+  })
+  it('today around the spring-forward day has a 23h previous day', () => {
+    const { start, prevStart } = periodBounds('today', new Date('2026-03-30T11:00:00Z'))
+    expect(start.toISOString()).toBe('2026-03-29T22:00:00.000Z') // Mon 30 Mar 00:00 CEST
+    expect(prevStart.toISOString()).toBe('2026-03-28T23:00:00.000Z') // Sun 29 Mar 00:00 CET
+    // no fixed 24h delta assertion: Mar 29 is the 23-hour spring-forward day
+  })
 })
 
 describe('/sales', () => {

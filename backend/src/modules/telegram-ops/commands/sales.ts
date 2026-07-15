@@ -4,30 +4,48 @@ import type { CommandHandler } from './router'
 
 type Period = 'today' | 'week' | 'month'
 
+/** Amsterdam UTC offset (CET +1h or CEST +2h) at a given instant, in ms. */
+function amsOffsetAt(instant: Date): number {
+  const ams = new Date(instant.toLocaleString('en-US', { timeZone: 'Europe/Amsterdam' }))
+  const utc = new Date(instant.toLocaleString('en-US', { timeZone: 'UTC' }))
+  return ams.getTime() - utc.getTime()
+}
+
+/**
+ * UTC instant of Amsterdam local midnight on the given calendar date
+ * (read from the Date's UTC fields). The offset is derived per boundary
+ * date, not reused from `now`, so boundaries that fall in a different
+ * DST regime (and DST-transition days themselves) come out correct:
+ * guess midnight with the offset at 00:00Z, then re-derive the offset
+ * at the guessed instant; one refinement converges for Europe/Amsterdam.
+ */
+function amsMidnight(calDate: Date): Date {
+  const utcMidnight = Date.UTC(calDate.getUTCFullYear(), calDate.getUTCMonth(), calDate.getUTCDate())
+  let guess = utcMidnight - amsOffsetAt(new Date(utcMidnight))
+  guess = utcMidnight - amsOffsetAt(new Date(guess))
+  return new Date(guess)
+}
+
 /** Amsterdam-midnight period start + the start of the previous period. */
 export function periodBounds(period: Period, now: Date): { start: Date; prevStart: Date } {
-  // Get the Amsterdam calendar date of `now`, then rebuild midnight in UTC.
+  // Get the Amsterdam calendar date of `now`, then do all arithmetic on
+  // calendar dates (Date.UTC normalizes over/underflow) and convert each
+  // boundary date to its own Amsterdam midnight.
   const fmt = new Intl.DateTimeFormat('en-CA', {
     timeZone: 'Europe/Amsterdam', year: 'numeric', month: '2-digit', day: '2-digit',
   })
   const [y, m, d] = fmt.format(now).split('-').map(Number)
-  // Amsterdam offset at `now` (CET +1 or CEST +2), derived by comparing zones.
-  const utcMidnight = Date.UTC(y, m - 1, d)
-  const amsAtUtcMidnight = new Date(new Date(utcMidnight).toLocaleString('en-US', { timeZone: 'Europe/Amsterdam' }))
-  const utcAtUtcMidnight = new Date(new Date(utcMidnight).toLocaleString('en-US', { timeZone: 'UTC' }))
-  const offsetMs = amsAtUtcMidnight.getTime() - utcAtUtcMidnight.getTime()
-  const dayStart = new Date(utcMidnight - offsetMs)
+  const cal = (yy: number, mm: number, dd: number) => new Date(Date.UTC(yy, mm - 1, dd))
 
-  const DAY = 24 * 3600 * 1000
-  if (period === 'today') return { start: dayStart, prevStart: new Date(dayStart.getTime() - DAY) }
-  if (period === 'week') {
-    const dow = new Date(dayStart.getTime() + offsetMs).getUTCDay() || 7 // Mon=1..Sun=7
-    const weekStart = new Date(dayStart.getTime() - (dow - 1) * DAY)
-    return { start: weekStart, prevStart: new Date(weekStart.getTime() - 7 * DAY) }
+  if (period === 'today') {
+    return { start: amsMidnight(cal(y, m, d)), prevStart: amsMidnight(cal(y, m, d - 1)) }
   }
-  const monthStart = new Date(Date.UTC(y, m - 1, 1) - offsetMs)
-  const prevMonthStart = new Date(Date.UTC(y, m - 2, 1) - offsetMs)
-  return { start: monthStart, prevStart: prevMonthStart }
+  if (period === 'week') {
+    const dow = cal(y, m, d).getUTCDay() || 7 // Mon=1..Sun=7
+    const monday = d - (dow - 1)
+    return { start: amsMidnight(cal(y, m, monday)), prevStart: amsMidnight(cal(y, m, monday - 7)) }
+  }
+  return { start: amsMidnight(cal(y, m, 1)), prevStart: amsMidnight(cal(y, m - 1, 1)) }
 }
 
 type SalesOrder = {
