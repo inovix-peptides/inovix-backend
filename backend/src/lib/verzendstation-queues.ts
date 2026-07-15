@@ -9,7 +9,7 @@ import {
   hasOverride,
   parseChecklist,
 } from "../admin/widgets/order-fulfillment-checklist.logic"
-import { normalizeBrokerPayment } from "../admin/widgets/order-payment-broker.logic"
+import { normalizeBrokerPayment, toAmount } from "../admin/widgets/order-payment-broker.logic"
 
 const BROKER_PROVIDER_ID = "pp_via_broker_via_broker"
 
@@ -97,7 +97,7 @@ function toEntry(row: QueueOrderRow, packedAt: string | null): QueueEntry {
     display_id: row.display_id ?? null,
     customer_name:
       `${a.first_name ?? ""} ${a.last_name ?? ""}`.trim() || (row.email ?? ""),
-    item_count: (row.items ?? []).reduce((n, i) => n + Number(i.quantity ?? 0), 0),
+    item_count: (row.items ?? []).reduce((n, i) => n + toAmount(i.quantity as never), 0),
     created_at: iso(row.created_at),
     packed_at: packedAt,
   }

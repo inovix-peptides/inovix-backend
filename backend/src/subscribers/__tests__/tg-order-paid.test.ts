@@ -36,12 +36,16 @@ describe('notifyOrderPaidOnTelegram', () => {
     expect(notify).toHaveBeenCalledWith(
       'tg-order-order_1',
       'order_paid',
-      expect.stringContaining('#28412')
+      expect.stringContaining('#28412'),
+      expect.objectContaining({ reply_markup: expect.anything() })
     )
     const text = notify.mock.calls[0][2] as string
     expect(text).toContain('€89.90')
     expect(text).toContain('NL')
     expect(text).not.toMatch(/jan|@/i) // no PII in pushes
+    const kb = JSON.stringify(notify.mock.calls[0][3])
+    expect(kb).toContain('lbl:order_1') // N1 action buttons (phase 2)
+    expect(kb).toContain('det:28412')
   })
 
   it('does nothing when the order is not paid yet', async () => {

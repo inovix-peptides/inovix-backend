@@ -97,6 +97,8 @@ describe('command handlers', () => {
     expect(reply).toContain('Usage')
   })
 
+  const textOf = (r: unknown): string => (typeof r === 'string' ? r : (r as { text: string }).text)
+
   it('/order shows items and customer city', async () => {
     graph.mockResolvedValue({
       data: [rawOrder({
@@ -106,8 +108,37 @@ describe('command handlers', () => {
       })],
     })
     const reply = await COMMANDS.order({ container, svc, chatId: '1', args: ['28412'] })
-    expect(reply).toContain('BPC-157 10mg')
-    expect(reply).toContain('Utrecht')
+    expect(textOf(reply)).toContain('BPC-157 10mg')
+    expect(textOf(reply)).toContain('Utrecht')
+  })
+
+  it('/order on a paid order without a label offers a Create label button', async () => {
+    const reply = await COMMANDS.order({ container, svc, chatId: '1', args: ['28412'] })
+    expect(typeof reply).toBe('object')
+    const kb = JSON.stringify((reply as { reply_markup?: unknown }).reply_markup)
+    expect(kb).toContain('lbl:order_1')
+    expect(kb).not.toContain('shp:')
+  })
+
+  it('/order on a labeled, unshipped order offers a Mark shipped button', async () => {
+    graph.mockResolvedValue({
+      data: [rawOrder({ fulfillments: [{ packed_at: 'x', shipped_at: null, canceled_at: null }] })],
+    })
+    const reply = await COMMANDS.order({ container, svc, chatId: '1', args: ['28412'] })
+    const kb = JSON.stringify((reply as { reply_markup?: unknown }).reply_markup)
+    expect(kb).toContain('shp:order_1:28412')
+    expect(kb).not.toContain('lbl:')
+  })
+
+  it('/order on a shipped or canceled order has no keyboard', async () => {
+    graph.mockResolvedValue({
+      data: [rawOrder({ fulfillments: [{ packed_at: 'x', shipped_at: 'y', canceled_at: null }] })],
+    })
+    const shipped = await COMMANDS.order({ container, svc, chatId: '1', args: ['28412'] })
+    expect(typeof shipped).toBe('string')
+    graph.mockResolvedValue({ data: [rawOrder({ canceled_at: '2026-07-15T10:00:00Z' })] })
+    const canceled = await COMMANDS.order({ container, svc, chatId: '1', args: ['28412'] })
+    expect(typeof canceled).toBe('string')
   })
 
   it('/order says not found for unknown ids', async () => {

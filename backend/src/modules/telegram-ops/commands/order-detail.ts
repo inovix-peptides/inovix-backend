@@ -39,7 +39,7 @@ export const orderDetailCommand: CommandHandler = async ({ container, args }) =>
     .map((l) => l?.tracking_url ? `<a href="${escapeHtml(l.tracking_url)}">${escapeHtml(l.tracking_number ?? 'track')}</a>` : escapeHtml(l?.tracking_number ?? ''))
     .filter(Boolean)
 
-  return [
+  const text = [
     `📄 <b>Order #${o.display_id}</b> ${orderGlyphs(st)}`,
     line('Placed', whenAms(o.created_at)),
     line('Total', `${eur(orderTotal(o))} ${o.currency_code?.toUpperCase() ?? ''}`),
@@ -50,4 +50,16 @@ export const orderDetailCommand: CommandHandler = async ({ container, args }) =>
     ...items,
     ...(tracking.length ? ['', `Tracking: ${tracking.join(', ')}`] : []),
   ].join('\n')
+
+  // Action buttons for the actionable states only. Single-order surface, so
+  // the callback handlers can edit this message in place without ambiguity.
+  const buttons: Array<{ text: string; callback_data: string }> = []
+  if (!st.canceled && st.paid && !st.hasLabel) {
+    buttons.push({ text: '📦 Create label', callback_data: `lbl:${o.id}` })
+  }
+  if (!st.canceled && st.hasLabel && !st.shipped) {
+    buttons.push({ text: '🚚 Mark shipped', callback_data: `shp:${o.id}:${o.display_id}` })
+  }
+  if (!buttons.length) return text
+  return { text, reply_markup: { inline_keyboard: [buttons] } }
 }

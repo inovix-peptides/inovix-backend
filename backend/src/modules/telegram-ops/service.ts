@@ -88,15 +88,86 @@ class TelegramOpsService extends MedusaService({ TelegramOpsEvent }) {
    * Claim-then-send means a Telegram outage can drop one message but never
    * double-send; notifications are advisory, orders are the record.
    */
-  async notify(key: string, kind: string, text: string): Promise<boolean> {
+  async notify(key: string, kind: string, text: string, extra: Record<string, unknown> = {}): Promise<boolean> {
     try {
       await this.createTelegramOpsEvents({ key, kind, sent_at: new Date(), payload: { text } })
     } catch (e) {
       if (isUniqueViolation(e)) return false
       throw e
     }
-    await this.sendToAll(text)
+    await this.sendToAll(text, extra)
     return true
+  }
+
+  async editMessage(chatId: string, messageId: number, text: string, extra: Record<string, unknown> = {}): Promise<void> {
+    if (!this.botToken()) return
+    // Omitting reply_markup in extra removes any existing inline keyboard.
+    const res = await sendTelegramRequest(this.botToken(), 'editMessageText', {
+      chat_id: chatId,
+      message_id: messageId,
+      text,
+      parse_mode: 'HTML',
+      link_preview_options: { is_disabled: true },
+      ...extra,
+    })
+    if (!res.ok) {
+      try {
+        const message = `telegram-ops: editMessageText in chat ${chatId} failed: ${res.description ?? 'unknown error'}`
+        this.logger_?.error?.(message)
+        Sentry.captureMessage(message, {
+          level: 'warning',
+          tags: { module: 'telegram-ops' },
+          extra: { chatId, messageId, description: res.description ?? null },
+        })
+      } catch {
+        /* logging must never break editMessage */
+      }
+    }
+  }
+
+  async answerCallback(callbackQueryId: string, text?: string): Promise<void> {
+    if (!this.botToken()) return
+    // Best effort: an unanswered callback only leaves a client spinner.
+    await sendTelegramRequest(this.botToken(), 'answerCallbackQuery', {
+      callback_query_id: callbackQueryId,
+      ...(text ? { text } : {}),
+    })
+  }
+
+  /**
+   * Claim an action key: audit row + double-tap dedup in one insert. Returns
+   * false when the key is already claimed. Callers that can fail AFTER a
+   * claim call releaseAction so a transient failure stays retryable.
+   */
+  async claimAction(key: string, kind: string, actor: { id: string; name: string }, payload: Record<string, unknown> = {}): Promise<boolean> {
+    try {
+      await this.createTelegramOpsEvents({
+        key, kind, sent_at: new Date(), payload,
+        actor_id: actor.id, actor_name: actor.name,
+      })
+      return true
+    } catch (e) {
+      if (isUniqueViolation(e)) return false
+      throw e
+    }
+  }
+
+  async releaseAction(key: string): Promise<void> {
+    try {
+      const rows = await this.listTelegramOpsEvents({ key })
+      const row = (rows as Array<{ id: string }>)[0]
+      if (row) await this.deleteTelegramOpsEvents(row.id)
+    } catch (e) {
+      this.logger_?.error?.(`telegram-ops: releaseAction(${key}) failed: ${(e as Error).message}`)
+    }
+  }
+
+  async listRecentActions(take: number): Promise<Array<{ kind: string; sent_at: Date | string | null; actor_name: string | null; payload: Record<string, unknown> | null }>> {
+    const rows = await this.listTelegramOpsEvents(
+      { kind: ['act_label', 'act_ship', 'act_restock'] },
+      { take, order: { sent_at: 'DESC' } }
+    )
+    return rows as never
   }
 }
 

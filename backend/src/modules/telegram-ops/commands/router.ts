@@ -8,6 +8,14 @@ import { todoCommand } from './todo'
 import { stockCommand } from './stock'
 import { findCommand } from './find'
 import { salesCommand } from './sales'
+import { restockCommand } from './restock'
+import { logCommand } from './log'
+import { CallbackQuery, handleCallback } from './callbacks'
+import { CommandReply, normalizeReply } from './reply'
+import '../actions' // registers lbl/lblo/shp/shpc/rst into CALLBACKS
+
+export { normalizeReply } from './reply'
+export type { CommandReply } from './reply'
 
 export type TelegramUpdate = {
   message?: {
@@ -15,6 +23,7 @@ export type TelegramUpdate = {
     from?: { id: number | string; first_name?: string; username?: string }
     text?: string
   }
+  callback_query?: CallbackQuery
 }
 
 export type CommandCtx = {
@@ -24,7 +33,7 @@ export type CommandCtx = {
   args: string[]
 }
 
-export type CommandHandler = (ctx: CommandCtx) => Promise<string>
+export type CommandHandler = (ctx: CommandCtx) => Promise<CommandReply>
 
 type OpsLogger = { info: (m: string) => void; warn: (m: string) => void; error: (m: string) => void }
 
@@ -45,11 +54,35 @@ export const COMMANDS: Record<string, CommandHandler> = {
   stock: stockCommand,
   find: findCommand,
   sales: salesCommand,
+  restock: restockCommand,
+  log: logCommand,
 }
 
 export async function handleUpdate(container: MedusaContainer, update: TelegramUpdate): Promise<void> {
   const svc = container.resolve(TELEGRAM_OPS_MODULE) as TelegramOpsService
   const logger = container.resolve('logger') as OpsLogger
+
+  // Button taps arrive as callback_query updates. Allowlist is enforced the
+  // same way as for messages; the callback is ALWAYS answered so the client
+  // spinner stops, but non-allowlisted taps do nothing.
+  const cb = update.callback_query
+  if (cb) {
+    const cbChatId = String(cb.message?.chat.id ?? '')
+    let toast: string | undefined
+    if (!svc.allowedChatIds().includes(cbChatId)) {
+      logger.warn(`telegram-ops: ignored callback from non-allowlisted chat ${cbChatId}`)
+    } else {
+      try {
+        const t = await handleCallback(container, svc, cb)
+        if (typeof t === 'string') toast = t
+      } catch (e) {
+        logger.error(`telegram-ops: callback ${cb.data ?? '?'} failed: ${(e as Error).message}`)
+        toast = 'Action failed. Check the logs.'
+      }
+    }
+    await svc.answerCallback(cb.id, toast)
+    return
+  }
 
   const msg = update.message
   if (!msg?.text) return
@@ -82,7 +115,8 @@ export async function handleUpdate(container: MedusaContainer, update: TelegramU
 
   try {
     const reply = await handler({ container, svc, chatId, args: parsed.args })
-    await svc.sendTo(chatId, reply)
+    const { text, extra } = normalizeReply(reply)
+    await svc.sendTo(chatId, text, extra)
   } catch (e) {
     logger.error(`telegram-ops: /${parsed.command} failed: ${(e as Error).message}`)
     await svc.sendTo(chatId, `Something went wrong running /${parsed.command}. Check the logs.`)

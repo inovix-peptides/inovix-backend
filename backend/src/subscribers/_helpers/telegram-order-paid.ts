@@ -47,7 +47,12 @@ export async function notifyOrderPaidOnTelegram(container: MedusaContainer, orde
       line('Country', (order.shipping_address?.country_code ?? '?').toUpperCase()),
       ...(order.shipping_methods?.[0]?.name ? [line('Shipping', order.shipping_methods[0].name)] : []),
     ].join('\n')
-    await svc.notify(`tg-order-${order.id}`, 'order_paid', text)
+    await svc.notify(`tg-order-${order.id}`, 'order_paid', text, {
+      reply_markup: { inline_keyboard: [[
+        { text: '📦 Create label', callback_data: `lbl:${order.id}` },
+        { text: 'Details', callback_data: `det:${order.display_id}` },
+      ]] },
+    })
   } catch (e) {
     const logger = container.resolve('logger')
     logger.error(`telegram-order-paid: failed for order ${orderId}: ${(e as Error).message}`)

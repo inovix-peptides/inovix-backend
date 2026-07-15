@@ -1,4 +1,4 @@
-import { parseCommand, handleUpdate, COMMANDS } from '../commands/router'
+import { parseCommand, handleUpdate, normalizeReply, COMMANDS } from '../commands/router'
 
 describe('parseCommand', () => {
   it('parses command and args', () => {
@@ -33,7 +33,7 @@ describe('handleUpdate', () => {
   it('answers /help for an allowlisted chat', async () => {
     const svc = makeSvc(['111'])
     await handleUpdate(makeContainer(svc) as any, msgUpdate(111, '/help') as any)
-    expect(svc.sendTo).toHaveBeenCalledWith('111', expect.stringContaining('/orders'))
+    expect(svc.sendTo).toHaveBeenCalledWith('111', expect.stringContaining('/orders'), {})
   })
 
   it('ignores non-allowlisted chats when an allowlist exists', async () => {
@@ -57,5 +57,57 @@ describe('handleUpdate', () => {
 
   it('a handler is looked up in COMMANDS', () => {
     expect(Object.keys(COMMANDS)).toEqual(expect.arrayContaining(['help', 'start']))
+  })
+})
+
+describe('handleUpdate with callback_query', () => {
+  const makeSvc = (chatIds: string[]) => ({
+    allowedChatIds: jest.fn(() => chatIds),
+    sendTo: jest.fn().mockResolvedValue(undefined),
+    editMessage: jest.fn().mockResolvedValue(undefined),
+    answerCallback: jest.fn().mockResolvedValue(undefined),
+  })
+  const makeContainer = (svc: unknown) => ({
+    resolve: jest.fn((key: string) => {
+      if (key === 'telegram_ops') return svc
+      if (key === 'logger') return { info: jest.fn(), warn: jest.fn(), error: jest.fn() }
+      return undefined
+    }),
+  })
+  const cbUpdate = (chatId: number, data: string) => ({
+    callback_query: {
+      id: 'cbq-1', from: { id: chatId, first_name: 'Sam' },
+      message: { message_id: 42, chat: { id: chatId }, text: 'original' }, data,
+    },
+  })
+
+  it('dispatches and answers the callback for an allowlisted chat', async () => {
+    const svc = makeSvc(['111'])
+    await handleUpdate(makeContainer(svc) as any, cbUpdate(111, 'dis') as any)
+    expect(svc.editMessage).toHaveBeenCalled()
+    expect(svc.answerCallback).toHaveBeenCalledWith('cbq-1', undefined)
+  })
+
+  it('ignores callbacks from non-allowlisted chats but still answers to stop the spinner', async () => {
+    const svc = makeSvc(['111'])
+    await handleUpdate(makeContainer(svc) as any, cbUpdate(999, 'dis') as any)
+    expect(svc.editMessage).not.toHaveBeenCalled()
+    expect(svc.answerCallback).toHaveBeenCalledWith('cbq-1', undefined)
+  })
+
+  it('a throwing handler answers with a failure toast instead of crashing', async () => {
+    const svc = makeSvc(['111'])
+    svc.editMessage.mockRejectedValue(new Error('boom'))
+    await handleUpdate(makeContainer(svc) as any, cbUpdate(111, 'dis') as any)
+    expect(svc.answerCallback).toHaveBeenCalledWith('cbq-1', expect.stringContaining('failed'))
+  })
+})
+
+describe('normalizeReply', () => {
+  it('passes strings through and unwraps reply objects', () => {
+    expect(normalizeReply('hi')).toEqual({ text: 'hi', extra: {} })
+    const kb = { inline_keyboard: [[{ text: 'x', callback_data: 'det:1' }]] }
+    expect(normalizeReply({ text: 'hi', reply_markup: kb })).toEqual({ text: 'hi', extra: { reply_markup: kb } })
+    expect(normalizeReply({ text: 'hi' })).toEqual({ text: 'hi', extra: {} })
   })
 })

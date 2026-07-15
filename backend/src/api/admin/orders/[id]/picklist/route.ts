@@ -2,6 +2,9 @@ import type { MedusaRequest, MedusaResponse } from "@medusajs/framework"
 import { ContainerRegistrationKeys } from "@medusajs/framework/utils"
 
 import { buildPicklistHtml, type PicklistView } from "./build-html"
+// Direct query.graph returns quantities as raw BigNumber objects
+// ({value, precision}); Number() on those is NaN. toAmount parses all shapes.
+import { toAmount } from "../../../../../admin/widgets/order-payment-broker.logic"
 
 // GET /admin/orders/:id/picklist | printable A4 pick list. Behind the standard
 // admin session auth (all /admin routes are). Opened in a new tab by the
@@ -69,7 +72,7 @@ export async function GET(req: MedusaRequest, res: MedusaResponse): Promise<void
       product_title: i.product_title ?? i.title ?? "Onbekend product",
       variant_title: i.variant_title ?? null,
       sku: i.variant_sku ?? null,
-      quantity: Number(i.quantity ?? 0),
+      quantity: toAmount(i.quantity as never),
     })),
   }
 

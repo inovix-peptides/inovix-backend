@@ -7,6 +7,7 @@
 import type { MedusaContainer } from "@medusajs/framework/types"
 import { ContainerRegistrationKeys, Modules } from "@medusajs/framework/utils"
 
+import { toAmount } from "../admin/widgets/order-payment-broker.logic"
 import { sendOrderShippedNotification } from "../subscribers/_helpers/send-order-shipped"
 
 const ORDER_FIELDS = [
@@ -92,9 +93,11 @@ export async function markDhlOrderShipped(
       const shipItems = ((order.items ?? []) as any[])
         .map((i: any) => ({
           id: i.id,
+          // Raw query.graph serves these as BigNumber objects; Number() would
+          // be NaN and silently skip registerShipment for every item.
           quantity:
-            Number(i.detail?.fulfilled_quantity ?? 0) -
-            Number(i.detail?.shipped_quantity ?? 0),
+            toAmount(i.detail?.fulfilled_quantity) -
+            toAmount(i.detail?.shipped_quantity),
         }))
         .filter((i: any) => i.quantity > 0)
       if (shipItems.length > 0) {
