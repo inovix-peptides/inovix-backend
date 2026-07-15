@@ -46,6 +46,19 @@ describe('TelegramOpsService', () => {
     expect(sendTelegramRequest).not.toHaveBeenCalled()
   })
 
+  it('sendTo/sendToAll never throws when the Telegram API reports a failed send, and logs it', async () => {
+    ;(sendTelegramRequest as jest.Mock).mockResolvedValue({ ok: false, description: 'chat not found' })
+    const logger = { error: jest.fn() }
+    const svc = new (TelegramOpsService as any)({ logger }, OPTS) as TelegramOpsService
+
+    await expect(svc.sendToAll('<b>hi</b>')).resolves.toBeUndefined()
+    expect(sendTelegramRequest).toHaveBeenCalledTimes(2) // 2 chats
+    expect(logger.error).toHaveBeenCalledTimes(2)
+    expect(logger.error).toHaveBeenCalledWith(
+      expect.stringContaining('chat not found')
+    )
+  })
+
   it('notify sends when the key is fresh and skips when already claimed', async () => {
     const svc = makeService()
     ;(svc as any).createTelegramOpsEvents = jest

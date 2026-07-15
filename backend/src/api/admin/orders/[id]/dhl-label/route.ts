@@ -108,7 +108,7 @@ export async function POST(
           headline("📦", `Label ready #${raw.display_id}`),
           ...(trackerCode ? [line("Tracking", trackerCode)] : []),
         ].join("\n")
-      ).catch(() => {}) // advisory: swallow async failures, Sentry captures happen upstream where relevant
+      ).catch(() => {}) // advisory: swallow async failures; send-level failures are logged inside the service
     } catch {
       /* advisory only */
     }

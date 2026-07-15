@@ -1,6 +1,7 @@
 import { MedusaService } from '@medusajs/framework/utils'
 import { TelegramOpsEvent } from './models/ops-event-log'
 import { sendTelegramRequest } from './telegram-client'
+import { Sentry } from '../../lib/instrument'
 
 export type TelegramOpsOptions = {
   botToken?: string
@@ -19,10 +20,12 @@ function isUniqueViolation(e: unknown): boolean {
 
 class TelegramOpsService extends MedusaService({ TelegramOpsEvent }) {
   protected options_: TelegramOpsOptions
+  protected logger_: { error?: (...args: unknown[]) => void } | undefined
 
   constructor(container: Record<string, unknown>, options: TelegramOpsOptions = {}) {
     super(...arguments)
     this.options_ = options
+    this.logger_ = (container as { logger?: { error?: (...args: unknown[]) => void } })?.logger
   }
 
   botToken(): string {
@@ -46,13 +49,29 @@ class TelegramOpsService extends MedusaService({ TelegramOpsEvent }) {
 
   async sendTo(chatId: string, text: string, extra: Record<string, unknown> = {}): Promise<void> {
     if (!this.botToken()) return
-    await sendTelegramRequest(this.botToken(), 'sendMessage', {
+    const res = await sendTelegramRequest(this.botToken(), 'sendMessage', {
       chat_id: chatId,
       text,
       parse_mode: 'HTML',
       link_preview_options: { is_disabled: true },
       ...extra,
     })
+    if (!res.ok) {
+      // Never let a failed-send report itself throw: sendTo must never throw,
+      // callers treat notifications as fire-and-forget.
+      try {
+        const message = `telegram-ops: sendMessage to chat ${chatId} failed: ${res.description ?? 'unknown error'}`
+        this.logger_?.error?.(message)
+        // No message body: text can contain order data, only description + metadata.
+        Sentry.captureMessage(message, {
+          level: 'warning',
+          tags: { module: 'telegram-ops' },
+          extra: { chatId, description: res.description ?? null },
+        })
+      } catch {
+        /* logging must never break sendTo */
+      }
+    }
   }
 
   async sendToAll(text: string, extra: Record<string, unknown> = {}): Promise<void> {

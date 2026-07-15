@@ -31,7 +31,7 @@ export const orderDetailCommand: CommandHandler = async ({ container, args }) =>
   const items = (o.items ?? []).map((i) => `  ${i.quantity}x ${escapeHtml(i.title ?? '?')} (${eur(i.unit_price)})`)
   const tracking = (o.fulfillments ?? [])
     .flatMap((f) => f.labels ?? [])
-    .map((l) => l.tracking_url ? `<a href="${escapeHtml(l.tracking_url)}">${escapeHtml(l.tracking_number ?? 'track')}</a>` : (l.tracking_number ?? ''))
+    .map((l) => l.tracking_url ? `<a href="${escapeHtml(l.tracking_url)}">${escapeHtml(l.tracking_number ?? 'track')}</a>` : escapeHtml(l.tracking_number ?? ''))
     .filter(Boolean)
 
   return [
