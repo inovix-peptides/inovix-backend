@@ -1,5 +1,6 @@
 import { ContainerRegistrationKeys } from '@medusajs/framework/utils'
 import { eur } from '../format'
+import { orderTotal } from './order-data'
 import type { CommandHandler } from './router'
 
 type Period = 'today' | 'week' | 'month'
@@ -52,6 +53,7 @@ type SalesOrder = {
   created_at: string
   total: number | string
   canceled_at: string | null
+  summary?: import('./order-data').OrderSummary
   payment_collections?: Array<{ status?: string; captured_amount?: number | string }>
 }
 
@@ -78,7 +80,7 @@ export const salesCommand: CommandHandler = async ({ container, args }) => {
   const query = container.resolve(ContainerRegistrationKeys.QUERY)
   const { data } = await query.graph({
     entity: 'order',
-    fields: ['created_at', 'total', 'canceled_at', 'payment_collections.status', 'payment_collections.captured_amount'],
+    fields: ['created_at', 'total', 'canceled_at', 'summary.*', 'payment_collections.status', 'payment_collections.captured_amount'],
     pagination: { take: SALES_SCAN_TAKE, skip: 0, order: { created_at: 'DESC' } },
   })
   const orders = ((data ?? []) as SalesOrder[])
@@ -86,7 +88,9 @@ export const salesCommand: CommandHandler = async ({ container, args }) => {
     .filter((o) => !o.canceled_at && isPaid(o))
   const inPeriod = orders.filter((o) => new Date(o.created_at) >= start)
   const inPrev = orders.filter((o) => new Date(o.created_at) < start)
-  const sum = (xs: SalesOrder[]) => xs.reduce((n, o) => n + Number(o.total ?? 0), 0)
+  // orderTotal: order-level `total` is unreliable via query.graph on live
+  // data; the summary is the source of truth (see order-data.ts).
+  const sum = (xs: SalesOrder[]) => xs.reduce((n, o) => n + orderTotal(o as never), 0)
   const cur = sum(inPeriod)
   const prev = sum(inPrev)
   const delta = prev > 0 ? ` (${cur >= prev ? '+' : ''}${Math.round(((cur - prev) / prev) * 100)}% vs previous ${period})` : ''

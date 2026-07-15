@@ -1,10 +1,11 @@
 import { escapeHtml, eur, line, orderGlyphs, whenAms } from '../format'
 import { ContainerRegistrationKeys } from '@medusajs/framework/utils'
-import { deriveStatus, RawOrder } from './order-data'
+import { deriveStatus, orderTotal, RawOrder } from './order-data'
 import type { CommandHandler } from './router'
 
 const DETAIL_FIELDS = [
   'id', 'display_id', 'created_at', 'total', 'currency_code', 'canceled_at', 'email',
+  'summary.*',
   'payment_collections.status', 'payment_collections.captured_amount',
   'fulfillments.packed_at', 'fulfillments.shipped_at', 'fulfillments.canceled_at',
   'fulfillments.labels.tracking_number', 'fulfillments.labels.tracking_url',
@@ -39,7 +40,7 @@ export const orderDetailCommand: CommandHandler = async ({ container, args }) =>
   return [
     `📄 <b>Order #${o.display_id}</b> ${orderGlyphs(st)}`,
     line('Placed', whenAms(o.created_at)),
-    line('Total', `${eur(o.total)} ${o.currency_code?.toUpperCase() ?? ''}`),
+    line('Total', `${eur(orderTotal(o))} ${o.currency_code?.toUpperCase() ?? ''}`),
     line('Customer', `${name || '?'}${o.email ? `, ${o.email}` : ''}`),
     line('Where', `${addr?.city ?? '?'}, ${(addr?.country_code ?? '?').toUpperCase()}`),
     '',

@@ -1,4 +1,4 @@
-import { deriveStatus } from '../commands/order-data'
+import { deriveStatus, orderTotal } from '../commands/order-data'
 import { COMMANDS } from '../commands/router'
 
 const rawOrder = (over: Record<string, unknown> = {}) => ({
@@ -38,6 +38,21 @@ describe('deriveStatus', () => {
   it('tolerates null elements inside relation arrays (live query.graph shape)', () => {
     const o = rawOrder({ fulfillments: [null, { packed_at: 'x', shipped_at: null, canceled_at: null }] })
     expect(deriveStatus(o as any)).toEqual({ paid: true, hasLabel: true, shipped: false, canceled: false })
+  })
+})
+
+describe('orderTotal', () => {
+  it('prefers the summary over a bogus order.total (prod regression: total showed shipping cost)', () => {
+    const o = rawOrder({ total: 6.95, summary: { raw_current_order_total: { value: '34.95' } } })
+    expect(orderTotal(o as any)).toBe(34.95)
+  })
+  it('falls back to plain current_order_total, then captured amount, then total', () => {
+    expect(orderTotal(rawOrder({ total: 6.95, summary: { current_order_total: 34.95 } }) as any)).toBe(34.95)
+    expect(orderTotal(rawOrder({ total: 6.95, summary: null }) as any)).toBe(89.9) // captured_amount from fixture
+    expect(orderTotal(rawOrder({ total: 12, summary: null, payment_collections: [{ status: 'pending', captured_amount: 0 }] }) as any)).toBe(12)
+  })
+  it('returns 0 when nothing is numeric', () => {
+    expect(orderTotal(rawOrder({ total: { value: 'x' }, summary: null, payment_collections: [] }) as any)).toBe(0)
   })
 })
 

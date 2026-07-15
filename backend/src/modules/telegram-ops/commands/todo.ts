@@ -1,5 +1,5 @@
 import { eur, whenAms } from '../format'
-import { deriveStatus, fetchRecentOrders } from './order-data'
+import { deriveStatus, fetchRecentOrders, orderTotal } from './order-data'
 import type { CommandHandler } from './router'
 
 export const todoCommand: CommandHandler = async ({ container }) => {
@@ -9,7 +9,7 @@ export const todoCommand: CommandHandler = async ({ container }) => {
   for (const o of orders) {
     const st = deriveStatus(o)
     if (st.canceled || !st.paid) continue
-    const row = `#${o.display_id} ${eur(o.total)} | ${whenAms(o.created_at)}`
+    const row = `#${o.display_id} ${eur(orderTotal(o))} | ${whenAms(o.created_at)}`
     if (!st.hasLabel) needsLabel.push(row)
     else if (!st.shipped) needsShipping.push(row)
   }
