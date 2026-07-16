@@ -1,16 +1,18 @@
 import { fetchInventoryRows, inventoryDisplayName } from '../commands/inventory-data'
 
+// Live link shape: the link exposes the inventory item under `inventory`
+// (graph path inventory_items.inventory.id | verified against prod).
 const variant = (invId: string, productTitle: string, variantTitle: string, sku?: string) => ({
   id: `var_${invId}`,
   title: variantTitle,
   sku: sku ?? null,
   product: { title: productTitle },
-  inventory_items: [{ inventory_item_id: invId }],
+  inventory_items: [{ inventory: { id: invId } }],
 })
 
-const invItem = (id: string, title: string, stocked = 10, reserved = 2) => ({
-  id, sku: title, title,
-  location_levels: [{ location_id: 'sloc_1', stocked_quantity: stocked, reserved_quantity: reserved }],
+const invItem = (id: string, title: string, opts: Partial<{ sku: string; stocked: number; reserved: number }> = {}) => ({
+  id, sku: opts.sku ?? null, title,
+  location_levels: [{ location_id: 'sloc_1', stocked_quantity: opts.stocked ?? 10, reserved_quantity: opts.reserved ?? 2 }],
 })
 
 function makeContainer(inventory: unknown[], variants: unknown[]) {
@@ -29,23 +31,25 @@ function makeContainer(inventory: unknown[], variants: unknown[]) {
 describe('fetchInventoryRows', () => {
   it('names rows via product + variant title, not the generic inventory title', async () => {
     const c = makeContainer(
-      [invItem('iitem_1', 'Vial', 6, 2)],
-      [variant('iitem_1', 'BPC-157', '10mg')]
+      [invItem('iitem_1', '10mg Vial', { stocked: 6, reserved: 2 })],
+      [variant('iitem_1', 'BPC-157', '10mg Vial')]
     )
     const rows = await fetchInventoryRows(c as never)
     expect(rows).toEqual([expect.objectContaining({
-      id: 'iitem_1', name: 'BPC-157 10mg', stocked: 6, reserved: 2, available: 4,
+      id: 'iitem_1', name: 'BPC-157 10mg Vial', stocked: 6, reserved: 2, available: 4,
     })])
   })
 
-  it('falls back to variant sku, then the inventory title, when product data is missing', async () => {
+  it('falls back to variant sku, then the inventory SKU before the packaging title', async () => {
     const c = makeContainer(
-      [invItem('iitem_1', 'Bottle'), invItem('iitem_2', 'Vial')],
-      [{ id: 'v1', title: null, sku: 'TB-500-5MG', product: null, inventory_items: [{ inventory_item_id: 'iitem_1' }] }]
+      [invItem('iitem_1', 'Bottle'), invItem('iitem_2', '10mg Vial', { sku: 'KPV-Vial-10MG' }), invItem('iitem_3', 'Vial')],
+      [{ id: 'v1', title: null, sku: 'TB-500-5MG', product: null, inventory_items: [{ inventory: { id: 'iitem_1' } }] }]
     )
     const rows = await fetchInventoryRows(c as never)
     expect(rows.find((r) => r.id === 'iitem_1')!.name).toBe('TB-500-5MG')
-    expect(rows.find((r) => r.id === 'iitem_2')!.name).toBe('Vial')
+    // Unlinked legacy item: the sku names the product, the title is packaging.
+    expect(rows.find((r) => r.id === 'iitem_2')!.name).toBe('KPV-Vial-10MG')
+    expect(rows.find((r) => r.id === 'iitem_3')!.name).toBe('Vial')
   })
 
   it('a failing variant lookup degrades to inventory titles instead of throwing', async () => {

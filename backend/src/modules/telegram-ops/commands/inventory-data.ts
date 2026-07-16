@@ -21,7 +21,13 @@ type VariantRow = {
   title?: string | null
   sku?: string | null
   product?: { title?: string | null } | null
-  inventory_items?: Array<{ inventory_item_id?: string | null } | null> | null
+  // The link exposes the related inventory item as `inventory`; its id is
+  // the ONLY verified graph path (inventory_items.inventory.id, same as
+  // src/jobs/check-variant-inventory-levels.ts). A flat
+  // `inventory_items.inventory_item_id` resolves to undefined SILENTLY
+  // (live-verified 2026-07-17: it left this map empty and every stock
+  // surface fell back to the packaging title).
+  inventory_items?: Array<{ inventory?: { id?: string | null } | null } | null> | null
 }
 
 // "BPC-157 10mg" from product + variant title; a lone default variant adds
@@ -42,12 +48,12 @@ async function variantByInventoryItem(container: MedusaContainer): Promise<Map<s
   try {
     const { data } = await query.graph({
       entity: 'product_variant',
-      fields: ['id', 'title', 'sku', 'product.title', 'inventory_items.inventory_item_id'],
+      fields: ['id', 'title', 'sku', 'product.title', 'inventory_items.inventory.id'],
     })
     for (const v of (data ?? []) as Array<VariantRow | null>) {
       if (!v) continue
       for (const link of v.inventory_items ?? []) {
-        const invId = link?.inventory_item_id
+        const invId = link?.inventory?.id
         if (invId) map.set(String(invId), v)
       }
     }
@@ -72,7 +78,10 @@ export async function fetchInventoryRows(container: MedusaContainer): Promise<In
     .map((i) => {
       const stocked = (i!.location_levels ?? []).reduce((n, l) => n + Number(l?.stocked_quantity ?? 0), 0)
       const reserved = (i!.location_levels ?? []).reduce((n, l) => n + Number(l?.reserved_quantity ?? 0), 0)
-      const fallback = String(i!.title || i!.sku || i!.id)
+      // SKU before title: live titles are the packaging ("10mg Vial") while
+      // skus name the product ("KPV-Vial-10MG"). Matters for the 13 legacy
+      // inventory items that have no variant link at all.
+      const fallback = String(i!.sku || i!.title || i!.id)
       return {
         id: String(i!.id),
         name: inventoryDisplayName(names.get(String(i!.id)), fallback),

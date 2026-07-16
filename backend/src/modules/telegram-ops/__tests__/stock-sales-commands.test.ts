@@ -9,9 +9,12 @@ const run = (cmd: string, args: string[] = []) => COMMANDS[cmd]({ container, svc
 beforeEach(() => jest.clearAllMocks())
 
 describe('/stock', () => {
+  // No variant links in this fixture (the graph mock answers every entity
+  // with these rows), so naming falls back to sku-first: live skus name the
+  // product while titles are the packaging ("10mg Vial").
   const items = [
-    { id: 'ii_1', sku: 'BPC-10', title: 'BPC-157 10mg', location_levels: [{ stocked_quantity: 10, reserved_quantity: 4 }] },
-    { id: 'ii_2', sku: 'TB-5', title: 'TB-500 5mg', location_levels: [{ stocked_quantity: 100, reserved_quantity: 0 }] },
+    { id: 'ii_1', sku: 'BPC-157 10mg', title: '10mg Vial', location_levels: [{ stocked_quantity: 10, reserved_quantity: 4 }] },
+    { id: 'ii_2', sku: 'TB-500 5mg', title: '5mg Vial', location_levels: [{ stocked_quantity: 100, reserved_quantity: 0 }] },
   ]
   it('shows available = stocked minus reserved, lowest first', async () => {
     graph.mockResolvedValue({ data: items })
