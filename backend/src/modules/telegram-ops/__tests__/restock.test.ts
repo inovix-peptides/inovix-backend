@@ -1,5 +1,5 @@
 import { restockCommand } from '../commands/restock'
-import { rstAction } from '../actions/restock'
+import { rskAction, rspAction, rstAction } from '../actions/restock'
 
 const item = (id: string, title: string, opts: Partial<{ sku: string; stocked: number; reserved: number; noLocation: boolean }> = {}) => ({
   id, title, sku: opts.sku ?? title,
@@ -121,5 +121,49 @@ describe('rstAction', () => {
     const toast = await rstAction(ctx, ['iitem_x', '5'])
     expect(toast).toContain('not found')
     expect((ctx as any).svc.claimAction).not.toHaveBeenCalled()
+  })
+})
+
+describe('rsk picker + rsp confirm (accident safety)', () => {
+  const makeCtx = (container: unknown) => ({
+    container,
+    svc: {
+      sendTo: jest.fn().mockResolvedValue(undefined),
+      editMessage: jest.fn().mockResolvedValue(undefined),
+      claimAction: jest.fn().mockResolvedValue(true),
+      releaseAction: jest.fn().mockResolvedValue(undefined),
+    },
+    chatId: '111', messageId: 42, originalText: '⚠️ Low stock: BPC-157 10mg',
+    actor: { id: '8842061517', name: 'Sam' },
+  }) as never
+
+  it('picker buttons go to the rsp confirm step, never straight to rst', async () => {
+    const c = makeContainer([item('iitem_1', 'BPC-157 10mg')])
+    const ctx = makeCtx(c)
+    await rskAction(ctx, ['iitem_1'])
+    const kb = JSON.stringify((ctx as any).svc.sendTo.mock.calls[0][2])
+    expect(kb).toContain('rsp:iitem_1:10')
+    expect(kb).toContain('rsp:iitem_1:25')
+    expect(kb).toContain('rsp:iitem_1:50')
+    expect(kb).not.toContain('rst:')
+  })
+
+  it('rsp renders the confirm prompt whose Confirm button is rst', async () => {
+    const c = makeContainer([item('iitem_1', 'BPC-157 10mg')])
+    const ctx = makeCtx(c)
+    await rspAction(ctx, ['iitem_1', '25'])
+    const [, , text, extra] = (ctx as any).svc.editMessage.mock.calls[0]
+    expect(text).toContain('Confirm?')
+    expect(text).toContain('+25')
+    const kb = JSON.stringify(extra)
+    expect(kb).toContain('rst:iitem_1:25')
+    expect(kb).toContain('dis')
+    expect((ctx as any).svc.claimAction).not.toHaveBeenCalled()
+  })
+
+  it('rsp refuses items without a stock location', async () => {
+    const c = makeContainer([item('iitem_1', 'BPC-157 10mg', { noLocation: true })])
+    const ctx = makeCtx(c)
+    await expect(rspAction(ctx, ['iitem_1', '25'])).resolves.toContain('location')
   })
 })

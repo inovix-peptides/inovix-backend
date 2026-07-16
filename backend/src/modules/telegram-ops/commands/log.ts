@@ -8,6 +8,7 @@ function describeAction(r: ActionRow): string {
   if (r.kind === 'act_restock') return `➕ +${p.qty ?? '?'} ${escapeHtml(String(p.name ?? '?'))}`
   if (r.kind === 'act_label') return `📦 Label #${p.display_id ?? '?'}${p.override ? ' (override)' : ''}`
   if (r.kind === 'act_ship') return `🚚 Shipped #${p.display_id ?? '?'}`
+  if (r.kind === 'act_email') return `✉️ Resent email${p.template ? ` ${escapeHtml(String(p.template))}` : ''}`
   return escapeHtml(r.kind)
 }
 

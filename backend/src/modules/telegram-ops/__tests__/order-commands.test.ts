@@ -136,15 +136,26 @@ describe('command handlers', () => {
     expect(kb).not.toContain('lbl:')
   })
 
-  it('/order on a shipped or canceled order has no keyboard', async () => {
+  it('/order on a shipped or canceled order keeps view-only buttons (Checklist + Emails), no write actions', async () => {
     graph.mockResolvedValue({
       data: [rawOrder({ fulfillments: [{ packed_at: 'x', shipped_at: 'y', canceled_at: null }] })],
     })
     const shipped = await COMMANDS.order({ container, svc, chatId: '1', args: ['28412'] })
-    expect(typeof shipped).toBe('string')
+    const shippedKb = JSON.stringify((shipped as { reply_markup?: unknown }).reply_markup)
+    expect(shippedKb).toContain('chk:order_1')
+    expect(shippedKb).toContain('eml:order_1')
+    expect(shippedKb).not.toContain('lbl:')
+    expect(shippedKb).not.toContain('shp:')
     graph.mockResolvedValue({ data: [rawOrder({ canceled_at: '2026-07-15T10:00:00Z' })] })
     const canceled = await COMMANDS.order({ container, svc, chatId: '1', args: ['28412'] })
-    expect(typeof canceled).toBe('string')
+    const canceledKb = JSON.stringify((canceled as { reply_markup?: unknown }).reply_markup)
+    expect(canceledKb).toContain('chk:order_1')
+    expect(canceledKb).not.toContain('lbl:')
+  })
+
+  it('/order always offers the Emails button', async () => {
+    const reply = await COMMANDS.order({ container, svc, chatId: '1', args: ['28412'] })
+    expect(JSON.stringify((reply as { reply_markup?: unknown }).reply_markup)).toContain('eml:order_1')
   })
 
   it('/order says not found for unknown ids', async () => {

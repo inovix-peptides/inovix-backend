@@ -184,7 +184,7 @@ class TelegramOpsService extends MedusaService({ TelegramOpsEvent }) {
 
   async listRecentActions(take: number): Promise<Array<{ kind: string; sent_at: Date | string | null; actor_name: string | null; payload: Record<string, unknown> | null }>> {
     const rows = await this.listTelegramOpsEvents(
-      { kind: ['act_label', 'act_ship', 'act_restock'] },
+      { kind: ['act_label', 'act_ship', 'act_restock', 'act_email'] },
       { take, order: { sent_at: 'DESC' } }
     )
     return rows as never

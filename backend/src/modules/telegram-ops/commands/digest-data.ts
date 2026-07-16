@@ -9,6 +9,7 @@ import { escapeHtml, eur, whenAms } from '../format'
 import { orderTotal, type RawOrder } from './order-data'
 import { periodBounds } from './sales'
 import { aggregateTopItems, type TopOrder } from './top'
+import { fetchInventoryRows } from './inventory-data'
 import { fetchUmamiStats } from './umami'
 
 export function lowStockThreshold(): number {
@@ -46,19 +47,12 @@ async function scanOrders(container: MedusaContainer): Promise<ScanOrder[]> {
 type LowStockLine = { name: string; available: number }
 
 async function lowStockLines(container: MedusaContainer): Promise<LowStockLine[]> {
-  const query = container.resolve(ContainerRegistrationKeys.QUERY)
-  const { data } = await query.graph({
-    entity: 'inventory_item',
-    fields: ['id', 'sku', 'title', 'location_levels.stocked_quantity', 'location_levels.reserved_quantity'],
-  })
   const threshold = lowStockThreshold()
-  return ((data ?? []) as Array<{ id: string; sku?: string | null; title?: string | null; location_levels?: Array<{ stocked_quantity?: number | string; reserved_quantity?: number | string }> } | null>)
-    .filter(Boolean)
-    .map((i) => {
-      const stocked = (i!.location_levels ?? []).reduce((n, l) => n + Number(l?.stocked_quantity ?? 0), 0)
-      const reserved = (i!.location_levels ?? []).reduce((n, l) => n + Number(l?.reserved_quantity ?? 0), 0)
-      return { name: String(i!.title || i!.sku || i!.id), available: stocked - reserved }
-    })
+  // Human product names via the shared inventory helper (inventory titles on
+  // live data are the packaging: "Vial", "Bottle").
+  const rows = await fetchInventoryRows(container)
+  return rows
+    .map((r) => ({ name: r.name, available: r.available }))
     .filter((r) => r.available <= threshold)
     .sort((a, b) => a.available - b.available)
 }

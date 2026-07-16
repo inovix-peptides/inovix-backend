@@ -1,10 +1,10 @@
 import type { MedusaContainer } from "@medusajs/framework/types"
-import { ContainerRegistrationKeys } from "@medusajs/framework/utils"
 
 import { TELEGRAM_OPS_MODULE } from "../modules/telegram-ops"
 import type TelegramOpsService from "../modules/telegram-ops/service"
 import { escapeHtml, headline } from "../modules/telegram-ops/format"
 import { lowStockThreshold } from "../modules/telegram-ops/commands/digest-data"
+import { fetchInventoryRows } from "../modules/telegram-ops/commands/inventory-data"
 import { Sentry } from "../lib/instrument"
 
 type StockState = "low" | "oos"
@@ -16,28 +16,21 @@ type StockState = "low" | "oos"
 export async function runStockWatch(container: MedusaContainer): Promise<void> {
   const svc = container.resolve(TELEGRAM_OPS_MODULE) as TelegramOpsService
   if (!svc.isConfigured()) return
-  const query = container.resolve(ContainerRegistrationKeys.QUERY)
   const threshold = lowStockThreshold()
 
-  const { data } = await query.graph({
-    entity: "inventory_item",
-    fields: ["id", "sku", "title", "location_levels.stocked_quantity", "location_levels.reserved_quantity"],
-  })
+  // Human product names (product + variant), not the packaging title.
+  const rows = await fetchInventoryRows(container)
 
-  for (const raw of (data ?? []) as Array<{ id: string; sku?: string | null; title?: string | null; location_levels?: Array<{ stocked_quantity?: number | string; reserved_quantity?: number | string }> } | null>) {
-    if (!raw) continue
-    const stocked = (raw.location_levels ?? []).reduce((n, l) => n + Number(l?.stocked_quantity ?? 0), 0)
-    const reserved = (raw.location_levels ?? []).reduce((n, l) => n + Number(l?.reserved_quantity ?? 0), 0)
-    const available = stocked - reserved
-    const name = String(raw.title || raw.sku || raw.id)
+  for (const item of rows) {
+    const { available, reserved, name } = item
     const current: StockState | null = available <= 0 ? "oos" : available <= threshold ? "low" : null
 
-    const key = `tg-stockstate-${raw.id}`
-    const row = await svc.findEvent(key)
-    const stored = (row?.payload as { state?: StockState } | null)?.state ?? null
+    const key = `tg-stockstate-${item.id}`
+    const stateRow = await svc.findEvent(key)
+    const stored = (stateRow?.payload as { state?: StockState } | null)?.state ?? null
 
     if (!current) {
-      if (row) await svc.releaseAction(key) // recovered: re-arm
+      if (stateRow) await svc.releaseAction(key) // recovered: re-arm
       continue
     }
     if (stored === current || (stored === "oos" && current === "low")) continue // no worsening
@@ -50,7 +43,7 @@ export async function runStockWatch(container: MedusaContainer): Promise<void> {
         ].join("\n")
     await svc.sendToAll(text, {
       reply_markup: { inline_keyboard: [[
-        { text: `➕ Restock ${escapeHtml(name).slice(0, 20)}`, callback_data: `rsk:${raw.id}` },
+        { text: `➕ Restock ${escapeHtml(name).slice(0, 20)}`, callback_data: `rsk:${item.id}` },
         { text: "📦 Stock", callback_data: "stk" },
       ]] },
     })

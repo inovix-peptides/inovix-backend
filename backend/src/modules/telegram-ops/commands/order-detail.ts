@@ -57,8 +57,8 @@ export const orderDetailCommand: CommandHandler = async ({ container, args }) =>
     ...(tracking.length ? ['', `Tracking: ${tracking.join(', ')}`] : []),
   ].join('\n')
 
-  // Action buttons for the actionable states only. Single-order surface, so
-  // the callback handlers can edit this message in place without ambiguity.
+  // Write-action buttons for the actionable states; Checklist and Emails are
+  // always available (view-only when the order is done).
   const buttons: Array<{ text: string; callback_data: string }> = []
   if (!st.canceled && st.paid && !st.hasLabel) {
     buttons.push({ text: '📦 Create label', callback_data: `lbl:${o.id}` })
@@ -66,9 +66,9 @@ export const orderDetailCommand: CommandHandler = async ({ container, args }) =>
   if (!st.canceled && st.hasLabel && !st.shipped) {
     buttons.push({ text: '🚚 Mark shipped', callback_data: `shp:${o.id}:${o.display_id}` })
   }
-  if (!st.canceled && !st.shipped) {
-    buttons.push({ text: '📋 Checklist', callback_data: `chk:${o.id}` })
-  }
-  if (!buttons.length) return text
-  return { text, reply_markup: { inline_keyboard: [buttons] } }
+  const infoButtons = [
+    { text: '📋 Checklist', callback_data: `chk:${o.id}` },
+    { text: '✉️ Emails', callback_data: `eml:${o.id}` },
+  ]
+  return { text, reply_markup: { inline_keyboard: buttons.length ? [buttons, infoButtons] : [infoButtons] } }
 }

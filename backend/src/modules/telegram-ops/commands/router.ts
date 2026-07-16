@@ -1,6 +1,7 @@
 import type { MedusaContainer } from '@medusajs/framework/types'
 import type TelegramOpsService from '../service'
 import { TELEGRAM_OPS_MODULE } from '../index'
+import { escapeHtml } from '../format'
 import { helpText } from './help'
 import { ordersCommand } from './orders'
 import { orderDetailCommand } from './order-detail'
@@ -109,7 +110,19 @@ export async function handleUpdate(container: MedusaContainer, update: TelegramU
   }
 
   if (!allowed.includes(chatId)) {
-    logger.warn(`telegram-ops: ignored update from non-allowlisted chat ${chatId}`)
+    logger.warn(`telegram-ops: refused update from non-allowlisted chat ${chatId}`)
+    // Polite refusal to the stranger (spec 2.2), plus ONE notification to the
+    // operator per unknown chat (notify dedups on the key) so a friend who
+    // should get access can be added to TELEGRAM_ALLOWED_CHAT_IDS.
+    await svc.sendTo(chatId, 'This is a private bot for the shop operator. Access requests go to the owner.')
+    const from = msg.from
+    const who = [from?.first_name, from?.username ? `@${from.username}` : null].filter(Boolean).join(' ')
+    await svc.notify(
+      `tg-stranger-${chatId}`,
+      'stranger',
+      `👋 Chat <b>${escapeHtml(chatId)}</b>${who ? ` (${escapeHtml(who)})` : ''} tried to use the bot. To grant access, add the id to TELEGRAM_ALLOWED_CHAT_IDS on Railway.`,
+      {}
+    )
     return
   }
 

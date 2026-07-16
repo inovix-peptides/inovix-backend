@@ -18,6 +18,7 @@ describe('handleUpdate', () => {
   const makeSvc = (chatIds: string[]) => ({
     allowedChatIds: jest.fn(() => chatIds),
     sendTo: jest.fn().mockResolvedValue(undefined),
+    notify: jest.fn().mockResolvedValue(true),
   })
   const makeContainer = (svc: unknown) => ({
     resolve: jest.fn((key: string) => {
@@ -36,10 +37,23 @@ describe('handleUpdate', () => {
     expect(svc.sendTo).toHaveBeenCalledWith('111', expect.stringContaining('/orders'), {})
   })
 
-  it('ignores non-allowlisted chats when an allowlist exists', async () => {
+  it('non-allowlisted chats get a polite refusal, never command output', async () => {
     const svc = makeSvc(['111'])
     await handleUpdate(makeContainer(svc) as any, msgUpdate(999, '/help') as any)
-    expect(svc.sendTo).not.toHaveBeenCalledWith('999', expect.anything())
+    expect(svc.sendTo).toHaveBeenCalledWith('999', expect.stringContaining('private bot'))
+    expect(svc.sendTo).not.toHaveBeenCalledWith('999', expect.stringContaining('/orders'))
+  })
+
+  it('a stranger triggers ONE operator notification with the chat id (dedup key)', async () => {
+    const svc = makeSvc(['111'])
+    await handleUpdate(makeContainer(svc) as any, msgUpdate(999, '/start') as any)
+    expect(svc.notify).toHaveBeenCalledWith(
+      'tg-stranger-999', 'stranger',
+      expect.stringContaining('999'),
+      expect.anything()
+    )
+    const text = (svc.notify as jest.Mock).mock.calls[0][2] as string
+    expect(text).toContain('Sam') // first_name helps the operator recognize who
   })
 
   it('bootstrap mode: empty allowlist replies ONLY with the chat id', async () => {

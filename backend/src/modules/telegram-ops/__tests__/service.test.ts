@@ -177,7 +177,7 @@ describe('phase 2 service additions', () => {
     ;(svc as any).listTelegramOpsEvents = list
     await svc.listRecentActions(20)
     expect(list).toHaveBeenCalledWith(
-      { kind: ['act_label', 'act_ship', 'act_restock'] },
+      { kind: ['act_label', 'act_ship', 'act_restock', 'act_email'] },
       expect.objectContaining({ take: 20, order: { sent_at: 'DESC' } })
     )
   })
