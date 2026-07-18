@@ -6,9 +6,12 @@ import type TelegramOpsService from '../modules/telegram-ops/service'
 import { Sentry } from '../lib/instrument'
 
 // Mirrors src/subscribers/order-shipped.ts / _helpers/send-order-shipped.ts:
-// event `shipment.created`, event.data.id is the fulfillment id, order +
-// tracking number resolved via the same `fulfillments.id` filter and
-// `fulfillments.labels.tracking_number` field path.
+// event `shipment.created`, event.data.id is the fulfillment id. Filtering
+// orders on `fulfillments.id` (cross-module link path) generates broken SQL
+// on Medusa 2.12 ("missing FROM-clause entry for table fulfillments" |
+// Sentry INOVIX-BACKEND-B), so resolve the order id via the
+// `order_fulfillment` link entity first, exactly like the shipped-email
+// helper does.
 export default async function tgShipmentCreatedHandler({
   event: { data },
   container,
@@ -19,9 +22,17 @@ export default async function tgShipmentCreatedHandler({
     if (!svc.isConfigured()) return
 
     const query = container.resolve(ContainerRegistrationKeys.QUERY)
+    const { data: links } = await query.graph({
+      entity: 'order_fulfillment',
+      filters: { fulfillment_id: fulfillmentId },
+      fields: ['order_id'],
+    })
+    const orderId = (links?.[0] as { order_id?: string } | undefined)?.order_id
+    if (!orderId) return
+
     const { data: orders } = await query.graph({
       entity: 'order',
-      filters: { 'fulfillments.id': fulfillmentId },
+      filters: { id: orderId },
       fields: [
         'id',
         'display_id',
