@@ -72,6 +72,18 @@ describe('TelegramOpsService', () => {
     expect(sendTelegramRequest).toHaveBeenCalledTimes(2) // 1 send x 2 chats
   })
 
+  it('notify skips silently on the Medusa-mapped duplicate error (prod shape)', async () => {
+    // Prod never sees the raw UniqueConstraintViolationException: Medusa's
+    // dbErrorMapper rewraps the 23505 into a MedusaError with name "Error",
+    // no code, and an "already exists." message (Sentry INOVIX-BACKEND-C).
+    const svc = makeService()
+    const mapped = new Error('Telegram ops event with key: tg-sentry-135155880, already exists.')
+    Object.assign(mapped, { type: 'invalid_data', __isMedusaError: true })
+    ;(svc as any).createTelegramOpsEvents = jest.fn().mockRejectedValue(mapped)
+    await expect(svc.notify('tg-sentry-135155880', 'ops_sentry', 'msg')).resolves.toBe(false)
+    expect(sendTelegramRequest).not.toHaveBeenCalled()
+  })
+
   it('notify rethrows non-unique-violation errors', async () => {
     const svc = makeService()
     ;(svc as any).createTelegramOpsEvents = jest.fn().mockRejectedValue(new Error('db down'))

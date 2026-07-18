@@ -14,7 +14,11 @@ function isUniqueViolation(e: unknown): boolean {
   return (
     err?.name === 'UniqueConstraintViolationException' ||
     err?.code === '23505' ||
-    /unique|duplicate/i.test(err?.message ?? '')
+    // Medusa's dbErrorMapper rewraps the Postgres 23505 into a MedusaError
+    // (type invalid_data, message "<Entity> with key: <k>, already exists.")
+    // before it reaches our catch, so match the mapped message too. Callers
+    // only use this around a create, where "already exists" is always a dup.
+    /unique|duplicate|already exists/i.test(err?.message ?? '')
   )
 }
 
