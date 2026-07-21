@@ -8,6 +8,7 @@ import type { MedusaContainer } from "@medusajs/framework/types"
 import { ContainerRegistrationKeys, Modules } from "@medusajs/framework/utils"
 
 import { toAmount } from "../admin/widgets/order-payment-broker.logic"
+import { autoCompleteOrderIfDone } from "./auto-complete-order"
 import { sendOrderShippedNotification } from "../subscribers/_helpers/send-order-shipped"
 
 const ORDER_FIELDS = [
@@ -115,6 +116,12 @@ export async function markDhlOrderShipped(
   // order id is passed so the helper never has to resolve the cross-module
   // link itself.
   await sendOrderShippedNotification(container, dhlFulfillment.id, { orderId })
+
+  // Close the order lifecycle once everything is done (captured + shipped);
+  // Medusa never advances order.status past "pending" on its own. Guarded
+  // inside the helper and never throws. Also runs on the already-shipped
+  // (resend-email) path so pre-feature orders get closed too.
+  await autoCompleteOrderIfDone(container, orderId, "mark-dhl-shipped")
 
   return { ok: true, fulfillment_id: dhlFulfillment.id, already_shipped: alreadyShipped }
 }
