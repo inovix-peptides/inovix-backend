@@ -3,6 +3,9 @@ import { lblAction, lbloAction } from '../actions/create-label'
 jest.mock('../../../lib/dhl-label', () => ({ createDhlLabelForOrder: jest.fn() }))
 import { createDhlLabelForOrder } from '../../../lib/dhl-label'
 
+jest.mock('../commands/checklist-data', () => ({ loadChecklistView: jest.fn() }))
+import { loadChecklistView } from '../commands/checklist-data'
+
 const makeCtx = () => ({
   container: { resolve: jest.fn(() => ({ info: jest.fn(), warn: jest.fn(), error: jest.fn() })) },
   svc: {
@@ -30,6 +33,18 @@ describe('lblAction', () => {
     )
     expect((ctx as any).svc.editMessage).toHaveBeenCalledWith('111', 42, expect.stringContaining('Label created'))
     expect(toast).toContain('Label')
+  })
+
+  it('created without override: no pick-skipped warning', async () => {
+    ;(createDhlLabelForOrder as jest.Mock).mockResolvedValue({
+      status: 'created', fulfillment_id: 'ful_1', display_id: 28412, tracking_number: '3S1',
+      label_pdf_url: null, shipment_tracking_url: null,
+    })
+    const ctx = makeCtx()
+    await lblAction(ctx, ['ord_1'])
+    const [, , text] = (ctx as any).svc.editMessage.mock.calls[0]
+    expect(text).not.toContain('Pick check skipped')
+    expect(loadChecklistView).not.toHaveBeenCalled()
   })
 
   it('checklist_blocked: edits into an override confirm with lblo/dis buttons', async () => {
@@ -101,5 +116,40 @@ describe('lbloAction', () => {
     expect((ctx as any).svc.claimAction).toHaveBeenCalledWith(
       'tg-act-lbl-ful_2', 'act_label', expect.anything(), expect.objectContaining({ override: true })
     )
+  })
+
+  it('created via override: warns that the pick check was skipped and lists the unticked items', async () => {
+    ;(createDhlLabelForOrder as jest.Mock).mockResolvedValue({
+      status: 'created', fulfillment_id: 'ful_2', display_id: 28413, tracking_number: '3S2',
+      label_pdf_url: null, shipment_tracking_url: null,
+    })
+    ;(loadChecklistView as jest.Mock).mockResolvedValue({
+      orderId: 'ord_1', displayId: 28413,
+      items: [
+        { id: 'ordli_1', title: 'Retatrutide 30mg', qty: 2, ticked: false },
+        { id: 'ordli_2', title: 'BPC-157 <10mg>', qty: 1, ticked: true },
+      ],
+    })
+    const ctx = makeCtx()
+    const toast = await lbloAction(ctx, ['ord_1'])
+    const [, , text] = (ctx as any).svc.editMessage.mock.calls[0]
+    expect(text).toContain('Label created')
+    expect(text).toContain('Pick check skipped')
+    expect(text).toContain('2x Retatrutide 30mg')
+    expect(text).not.toContain('BPC-157')
+    expect(toast).toContain('pick check skipped')
+  })
+
+  it('created via override: warning survives a checklist-view load failure', async () => {
+    ;(createDhlLabelForOrder as jest.Mock).mockResolvedValue({
+      status: 'created', fulfillment_id: 'ful_2', display_id: 28413, tracking_number: '3S2',
+      label_pdf_url: null, shipment_tracking_url: null,
+    })
+    ;(loadChecklistView as jest.Mock).mockRejectedValue(new Error('graph down'))
+    const ctx = makeCtx()
+    await lbloAction(ctx, ['ord_1'])
+    const [, , text] = (ctx as any).svc.editMessage.mock.calls[0]
+    expect(text).toContain('Label created')
+    expect(text).toContain('Pick check skipped')
   })
 })
