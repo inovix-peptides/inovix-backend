@@ -1,10 +1,14 @@
 import { topCommand, aggregateTopItems } from '../commands/top'
 import { customerCommand } from '../commands/customer'
 
+// topCommand filters on periodBounds(period, new Date()), so this MUST stay
+// relative to now. A hardcoded date silently falls out of the /top week window
+// once that week passes and the suite goes permanently red (it did: pinned to
+// 2026-07-14, red from 2026-07-21 onwards).
 const order = (over: Record<string, unknown> = {}) => ({
   id: 'ord_1',
   display_id: 28412,
-  created_at: '2026-07-14T10:00:00Z',
+  created_at: new Date().toISOString(),
   canceled_at: null,
   email: 'jan@x.nl',
   summary: { raw_current_order_total: { value: '89.90' } },
