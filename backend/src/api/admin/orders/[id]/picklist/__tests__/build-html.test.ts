@@ -12,6 +12,7 @@ const view: PicklistView = {
     { product_title: "BPC-157", variant_title: "5mg", sku: "BPC-5", quantity: 2 },
     { product_title: "TB-500 & co", variant_title: null, sku: null, quantity: 1 },
   ],
+  customer_note: null,
 }
 
 describe("escapeHtml", () => {
@@ -48,5 +49,31 @@ describe("buildPicklistHtml", () => {
   it("keeps sharp corners (no border-radius other than 0)", () => {
     expect(html).toContain("border-radius: 0")
     expect(html.match(/border-radius/g)).toHaveLength(1)
+  })
+
+  it("omits the note block entirely when there is no note", () => {
+    expect(html).not.toContain("Klantopmerking")
+  })
+
+  describe("customer note", () => {
+    const noted = buildPicklistHtml({
+      ...view,
+      customer_note: 'Bel <b>eerst</b> aan bij "de buren"\n\nDank!',
+    })
+
+    it("prints the note in its own block", () => {
+      expect(noted).toContain("Klantopmerking")
+      expect(noted).toContain("Dank!")
+    })
+
+    it("escapes markup in the note", () => {
+      expect(noted).not.toContain("<b>eerst</b>")
+      expect(noted).toContain("&lt;b&gt;eerst&lt;/b&gt;")
+      expect(noted).toContain("&quot;de buren&quot;")
+    })
+
+    it("keeps the customer's line breaks readable on paper", () => {
+      expect(noted).toContain("white-space: pre-wrap")
+    })
   })
 })

@@ -62,6 +62,15 @@ describe('loadChecklistView', () => {
     expect(view!.steps.pick).toBe('locked')
   })
 
+  it('reads the customer note off the order metadata', async () => {
+    const order = baseOrder({ metadata: { customer_note: 'Graag zonder bel' } })
+    const view = await loadChecklistView(makeContainer(order) as never, 'ord_1')
+    expect(view!.customerNote).toBe('Graag zonder bel')
+
+    const none = await loadChecklistView(makeContainer(baseOrder()) as never, 'ord_1')
+    expect(none!.customerNote).toBeNull()
+  })
+
   it('returns null for a missing order', async () => {
     await expect(loadChecklistView(makeContainer(null) as never, 'ord_x')).resolves.toBeNull()
   })
@@ -87,7 +96,20 @@ describe('renderChecklist', () => {
     shipped: false,
     canceled: false,
     steps: { payment: 'done', pick: 'active', label: 'locked', close: 'locked', ship: 'locked' },
+    customerNote: null,
     ...over,
+  })
+
+  it('shows the customer note under the steps, escaped', () => {
+    const r = renderChecklist(view({ customerNote: 'Let op: <fragiel>' }))
+    expect(r.text).toContain('Customer note')
+    expect(r.text).toContain('&lt;fragiel&gt;')
+    // Below the last step, so it is the last thing read before packing.
+    expect(r.text.indexOf('Customer note')).toBeGreaterThan(r.text.indexOf('Shipped'))
+  })
+
+  it('omits the note block when there is none', () => {
+    expect(renderChecklist(view()).text).not.toContain('Customer note')
   })
 
   it('renders item tick buttons with index-based callback data', () => {

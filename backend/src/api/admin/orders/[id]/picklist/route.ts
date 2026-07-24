@@ -2,6 +2,7 @@ import type { MedusaRequest, MedusaResponse } from "@medusajs/framework"
 import { ContainerRegistrationKeys } from "@medusajs/framework/utils"
 
 import { buildPicklistHtml, type PicklistView } from "./build-html"
+import { customerNoteFromOrder } from "../../../../../admin/widgets/customer-note.logic"
 // Direct query.graph returns quantities as raw BigNumber objects
 // ({value, precision}); Number() on those is NaN. toAmount parses all shapes.
 import { toAmount } from "../../../../../admin/widgets/order-payment-broker.logic"
@@ -18,6 +19,7 @@ const ORDER_FIELDS = [
   "display_id",
   "created_at",
   "email",
+  "metadata",
   "shipping_address.*",
   "items.id",
   "items.quantity",
@@ -74,6 +76,7 @@ export async function GET(req: MedusaRequest, res: MedusaResponse): Promise<void
       sku: i.variant_sku ?? null,
       quantity: toAmount(i.quantity as never),
     })),
+    customer_note: customerNoteFromOrder(order),
   }
 
   res.setHeader("content-type", "text/html; charset=utf-8")

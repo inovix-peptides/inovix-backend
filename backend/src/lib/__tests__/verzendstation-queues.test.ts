@@ -184,6 +184,28 @@ describe("buildVerzendstationQueues", () => {
   })
 })
 
+describe("customer note on queue entries", () => {
+  it("carries the note through to the queue entry", () => {
+    const q = buildVerzendstationQueues([
+      row({ metadata: { customer_note: "Graag zonder bel" } }),
+    ])
+    expect(q.to_process[0].customer_note).toBe("Graag zonder bel")
+  })
+
+  it("reads the legacy delivery_notes key for pre-backfill orders", () => {
+    const q = buildVerzendstationQueues([row({ metadata: { delivery_notes: "oud" } })])
+    expect(q.to_process[0].customer_note).toBe("oud")
+  })
+
+  it("is null when the customer left no note", () => {
+    expect(buildVerzendstationQueues([row({})]).to_process[0].customer_note).toBeNull()
+    const withOtherMeta = buildVerzendstationQueues([
+      row({ metadata: { fulfillment_checklist: { items: {} } } }),
+    ])
+    expect(withOtherMeta.to_process[0].customer_note).toBeNull()
+  })
+})
+
 describe("selectStaleUnshipped", () => {
   const NOW = new Date("2026-07-14T12:00:00.000Z").getTime()
   const DAY = 24 * 60 * 60 * 1000

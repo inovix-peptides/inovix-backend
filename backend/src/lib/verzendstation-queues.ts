@@ -4,6 +4,7 @@
 // fulfillment timestamps. Shared by the queue API route and the daily
 // unshipped-orders alert job.
 
+import { customerNoteFromOrder } from "../admin/widgets/customer-note.logic"
 import {
   evaluatePaymentGate,
   hasOverride,
@@ -78,6 +79,8 @@ export type QueueEntry = {
   item_count: number
   created_at: string | null
   packed_at: string | null
+  /** The customer's checkout remark, null when they left none. */
+  customer_note: string | null
 }
 
 export type VerzendstationQueues = {
@@ -100,6 +103,7 @@ function toEntry(row: QueueOrderRow, packedAt: string | null): QueueEntry {
     item_count: (row.items ?? []).reduce((n, i) => n + toAmount(i.quantity as never), 0),
     created_at: iso(row.created_at),
     packed_at: packedAt,
+    customer_note: customerNoteFromOrder(row),
   }
 }
 

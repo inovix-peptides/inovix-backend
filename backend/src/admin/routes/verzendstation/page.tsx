@@ -18,6 +18,7 @@ type QueueEntry = {
   item_count: number
   created_at: string | null
   packed_at: string | null
+  customer_note: string | null
 }
 
 type Queues = {
@@ -43,9 +44,22 @@ function OrderRow({ entry, ageLabel }: { entry: QueueEntry; ageLabel: string }) 
             {entry.item_count} {entry.item_count === 1 ? "item" : "items"}
           </Text>
         </div>
-        <Text size="small" className="text-ui-fg-subtle whitespace-nowrap">
-          {ageLabel}
-        </Text>
+        <div className="flex items-center gap-3">
+          {/* Marker only: the full note is on the order page, this row just has
+              to stop the fulfiller from packing past it. */}
+          {entry.customer_note ? (
+            <span
+              title={entry.customer_note}
+              className="px-2 py-0.5 text-[10px] uppercase tracking-wider whitespace-nowrap"
+              style={{ border: "1px solid #5eead4", background: "#f0fdfa", color: "#0f766e" }}
+            >
+              Opmerking
+            </span>
+          ) : null}
+          <Text size="small" className="text-ui-fg-subtle whitespace-nowrap">
+            {ageLabel}
+          </Text>
+        </div>
       </div>
     </Link>
   )

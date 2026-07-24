@@ -12,6 +12,7 @@ import {
 } from "@medusajs/ui"
 import { useEffect, useState, type CSSProperties, type ReactNode } from "react"
 
+import { customerNoteFromOrder } from "./customer-note.logic"
 import { decodeBase64DataUri } from "./order-dhl-parcel.logic"
 import {
   allItemsTicked,
@@ -521,6 +522,7 @@ const OrderFulfillmentChecklistWidget = ({
   const methodData = dhlMethod?.data ?? {}
   const isPs = methodData.dhl_option === "PS"
   const allDone = steps.ship === "done"
+  const customerNote = customerNoteFromOrder(order)
 
   return (
     <>
@@ -554,6 +556,35 @@ const OrderFulfillmentChecklistWidget = ({
             ) : null}
           </div>
         </div>
+
+        {/* Customer note. Rendered ONLY when the customer left one, so its
+            presence is itself the signal that something needs reading. */}
+        {customerNote ? (
+          <div className="px-6 py-4">
+            <div
+              style={{
+                borderLeft: "3px solid #0d9488",
+                background: "#f0fdfa",
+                padding: "10px 14px",
+              }}
+            >
+              <Text
+                size="xsmall"
+                weight="plus"
+                className="uppercase"
+                style={{ color: "#0f766e", letterSpacing: "0.06em" }}
+              >
+                Klantopmerking
+              </Text>
+              <Text
+                size="small"
+                style={{ color: "#134e4a", whiteSpace: "pre-wrap", marginTop: 4 }}
+              >
+                {customerNote}
+              </Text>
+            </div>
+          </div>
+        ) : null}
 
         {/* Step 1: payment */}
         <StepRow n={1} id="payment" state={steps.payment}>

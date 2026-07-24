@@ -19,6 +19,8 @@ export type PicklistView = {
   dhl_option_label: string
   service_point: string | null
   items: PicklistItemView[]
+  /** The customer's checkout remark, null when they left none. */
+  customer_note: string | null
 }
 
 export function escapeHtml(s: string): string {
@@ -87,6 +89,9 @@ export function buildPicklistHtml(view: PicklistView): string {
   ol.steps li { margin: 8px 0; }
   .sign { margin-top: 32px; display: flex; gap: 24px; }
   .sign > div { flex: 1; border-top: 1px solid #000; padding-top: 6px; }
+  .note { border: 2px solid #000; padding: 10px 12px; margin: 14px 0; }
+  .note .label { text-transform: uppercase; font-size: 11px; letter-spacing: 0.05em; font-weight: bold; }
+  .note .body { margin-top: 4px; white-space: pre-wrap; font-size: 14px; }
 </style>
 </head>
 <body>
@@ -106,6 +111,14 @@ export function buildPicklistHtml(view: PicklistView): string {
     }
   </div>
 </div>
+${
+  view.customer_note
+    ? `<div class="note">
+  <div class="label">Klantopmerking</div>
+  <div class="body">${escapeHtml(view.customer_note)}</div>
+</div>`
+    : ""
+}
 <table>
   <thead><tr><th></th><th>Product</th><th>Sterkte / variant</th><th>SKU</th><th>Aantal</th></tr></thead>
   <tbody>

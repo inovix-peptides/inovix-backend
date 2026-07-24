@@ -9,8 +9,9 @@ import {
   type StepId,
   type StepState,
 } from '../../../admin/widgets/order-fulfillment-checklist.logic'
+import { customerNoteFromOrder } from '../../../admin/widgets/customer-note.logic'
 import { normalizeBrokerPayment } from '../../../admin/widgets/order-payment-broker.logic'
-import { escapeHtml } from '../format'
+import { customerNoteBlock, escapeHtml } from '../format'
 import { itemQuantity } from './order-data'
 
 const BROKER_PROVIDER_ID = 'pp_via_broker_via_broker'
@@ -53,6 +54,8 @@ export type ChecklistView = {
   shipped: boolean
   canceled: boolean
   steps: Record<StepId, StepState>
+  /** The customer's checkout remark, null when they left none. */
+  customerNote: string | null
 }
 
 // Load everything the phone checklist needs for one order. Items are sorted
@@ -122,6 +125,10 @@ export async function loadChecklistView(container: MedusaContainer, orderId: str
     shipped,
     canceled: Boolean(o.canceled_at) || o.status === 'canceled',
     steps,
+    // Read straight off the order: by the time a human opens a checklist the
+    // order.placed copy has long landed. The N1 push is the only reader that
+    // races the copy, and it uses resolveOrderCustomerNote instead.
+    customerNote: customerNoteFromOrder(o),
   }
 }
 
@@ -145,6 +152,8 @@ export function renderChecklist(view: ChecklistView): { text: string; reply_mark
     `${STEP_GLYPH[view.steps.label]} DHL label`,
     `${STEP_GLYPH[view.steps.close]} Package closed`,
     `${STEP_GLYPH[view.steps.ship]} Shipped`,
+    // Below the steps so it is the last thing read before packing starts.
+    ...(view.customerNote ? [customerNoteBlock(view.customerNote)] : []),
   ]
   const text = lines.join('\n')
 

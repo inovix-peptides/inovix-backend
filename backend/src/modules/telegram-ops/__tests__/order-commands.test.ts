@@ -112,6 +112,29 @@ describe('command handlers', () => {
     expect(textOf(reply)).toContain('Utrecht')
   })
 
+  it('/order shows the full customer note, escaped and untruncated', async () => {
+    const note = `A <very> long remark ${'x'.repeat(400)}`
+    // Container that also serves the order module the note helper reads.
+    const noteContainer = {
+      resolve: jest.fn((key: string) =>
+        key === 'order'
+          ? { retrieveOrder: async () => ({ id: 'order_1', metadata: { customer_note: note } }) }
+          : { graph }
+      ),
+    } as any
+    const reply = await COMMANDS.order({ container: noteContainer, svc, chatId: '1', args: ['28412'] })
+    const text = textOf(reply)
+    expect(text).toContain('Customer note')
+    expect(text).toContain('&lt;very&gt;')
+    // Unlike the push, /order does not shorten the note.
+    expect(text).toContain('x'.repeat(400))
+  })
+
+  it('/order omits the note block when there is none', async () => {
+    const reply = await COMMANDS.order({ container, svc, chatId: '1', args: ['28412'] })
+    expect(textOf(reply)).not.toContain('Customer note')
+  })
+
   it('/order on a paid order without a label offers a Create label button', async () => {
     const reply = await COMMANDS.order({ container, svc, chatId: '1', args: ['28412'] })
     expect(typeof reply).toBe('object')

@@ -41,3 +41,15 @@ export function headline(emoji: string, text: string): string {
 export function line(label: string, value: string): string {
   return `${label}: ${escapeHtml(value)}`
 }
+
+/**
+ * The customer's free-text order remark, as its own block.
+ *
+ * DELIBERATE EXCEPTION to the "no customer PII in pushed notifications" rule:
+ * the operator chose full note text in the push over a presence flag on
+ * 2026-07-24, because a note is only worth pushing if it can be acted on
+ * without opening the app. See the inovix-telegram-ops skill.
+ */
+export function customerNoteBlock(note: string): string {
+  return `\n📝 <b>Customer note</b>\n${escapeHtml(note)}`
+}

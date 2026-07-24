@@ -1,10 +1,14 @@
 import { ContainerRegistrationKeys } from '@medusajs/framework/utils'
 import type { MedusaContainer } from '@medusajs/framework/types'
-import { eur, headline, line } from '../../modules/telegram-ops/format'
+import { customerNoteBlock, eur, headline, line } from '../../modules/telegram-ops/format'
 import { itemQuantity, orderTotal } from '../../modules/telegram-ops/commands/order-data'
 import { TELEGRAM_OPS_MODULE } from '../../modules/telegram-ops'
 import type TelegramOpsService from '../../modules/telegram-ops/service'
+import { resolveOrderCustomerNote, truncateCustomerNote } from '../../lib/customer-note'
 import { Sentry } from '../../lib/instrument'
+
+/** Push budget for the note. The full text is one tap away under /order. */
+const PUSH_NOTE_MAX = 300
 
 /**
  * N1: "new paid order". Called from BOTH tg-order-placed and
@@ -40,12 +44,17 @@ export async function notifyOrderPaidOnTelegram(container: MedusaContainer, orde
       (n: number, i: unknown) => n + (i ? itemQuantity(i as never) ?? 0 : 0),
       0
     )
+    // Resolved (not read off order.metadata) because the copy subscriber fires
+    // on the same event as this one: the cart fallback removes the race.
+    const note = await resolveOrderCustomerNote(container, orderId)
+
     const text = [
       headline('🛒', `New order #${order.display_id}`),
       line('Total', eur(orderTotal(order as never))),
       line('Items', String(itemCount)),
       line('Country', (order.shipping_address?.country_code ?? '?').toUpperCase()),
       ...(order.shipping_methods?.[0]?.name ? [line('Shipping', order.shipping_methods[0].name)] : []),
+      ...(note ? [customerNoteBlock(truncateCustomerNote(note, PUSH_NOTE_MAX))] : []),
     ].join('\n')
     await svc.notify(`tg-order-${order.id}`, 'order_paid', text, {
       reply_markup: { inline_keyboard: [[

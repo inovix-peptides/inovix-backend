@@ -1,11 +1,13 @@
-import { escapeHtml, eur, line, orderGlyphs, whenAms } from '../format'
+import { customerNoteBlock, escapeHtml, eur, line, orderGlyphs, whenAms } from '../format'
 import { ContainerRegistrationKeys } from '@medusajs/framework/utils'
 import { deriveStatus, firstNumber, itemQuantity, orderTotal, RawOrder } from './order-data'
 import { checklistSummaryLine, loadChecklistView } from './checklist-data'
+import { resolveOrderCustomerNote } from '../../../lib/customer-note'
 import type { CommandHandler } from './router'
 
 const DETAIL_FIELDS = [
   'id', 'display_id', 'created_at', 'total', 'currency_code', 'canceled_at', 'email',
+  'metadata',
   'summary.*',
   'payment_collections.status', 'payment_collections.captured_amount',
   'fulfillments.packed_at', 'fulfillments.shipped_at', 'fulfillments.canceled_at',
@@ -44,6 +46,10 @@ export const orderDetailCommand: CommandHandler = async ({ container, args }) =>
   // never break /order itself).
   const checklistView = await loadChecklistView(container, o.id).catch(() => null)
 
+  // Full text here (no truncation): /order is the on-demand lookup that may
+  // show customer details.
+  const note = await resolveOrderCustomerNote(container, o.id)
+
   const text = [
     `📄 <b>Order #${o.display_id}</b> ${orderGlyphs(st)}`,
     line('Placed', whenAms(o.created_at)),
@@ -51,6 +57,7 @@ export const orderDetailCommand: CommandHandler = async ({ container, args }) =>
     line('Customer', `${name || '?'}${o.email ? `, ${o.email}` : ''}`),
     line('Where', `${addr?.city ?? '?'}, ${(addr?.country_code ?? '?').toUpperCase()}`),
     ...(checklistView ? [checklistSummaryLine(checklistView)] : []),
+    ...(note ? [customerNoteBlock(note)] : []),
     '',
     '<b>Items</b>',
     ...items,

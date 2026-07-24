@@ -232,6 +232,42 @@ describe("DhlParcelFulfillmentProviderService", () => {
     ])
   })
 
+  // ─── The customer note must NEVER reach DHL ──────────────────────────────────
+  // The note is addressed to Inovix, not the courier (operator decision,
+  // 2026-07-24). The label payload is a fixed whitelist with no free-text
+  // field, and this test is what keeps it that way: adding any order-metadata
+  // passthrough to the label input will fail here.
+  it("createFulfillment never sends the customer note to DHL", async () => {
+    const client = makeMockClient()
+    client.createLabel.mockResolvedValue(SAMPLE_LABEL_RESPONSE)
+    const { svc } = await makeService(client)
+
+    const NOTE = "GEHEIME-KLANTOPMERKING-graag-bij-de-buren"
+    const order = {
+      ...sampleOrder(),
+      metadata: { customer_note: NOTE, delivery_notes: NOTE },
+    }
+
+    await svc.createFulfillment(
+      // Also smuggle it in through the fulfillment data, the other plausible
+      // route into the payload.
+      { ...BASE_DATA, customer_note: NOTE } as never,
+      SAMPLE_ITEMS,
+      order,
+      {},
+    )
+
+    const input = client.createLabel.mock.calls[0][0]
+    expect(JSON.stringify(input)).not.toContain(NOTE)
+    expect(JSON.stringify(input)).not.toContain("KLANTOPMERKING")
+
+    // The only free-ish input DHL gets is the order number as REFERENCE.
+    const referenceInputs = (input.options as Array<{ key: string; input?: string }>)
+      .filter((o) => o.key === "REFERENCE")
+      .map((o) => o.input)
+    expect(referenceInputs).toEqual(["1042"])
+  })
+
   // ─── Test 5: createFulfillment idempotency ───────────────────────────────────
   it("createFulfillment is idempotent: skips the client when dhl_tracking_number is already set", async () => {
     const client = makeMockClient()
